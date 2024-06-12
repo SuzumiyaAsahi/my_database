@@ -1,3 +1,6 @@
+mod data;
+mod index;
+
 pub fn add(left: usize, right: usize) -> usize {
     left + right
 }
