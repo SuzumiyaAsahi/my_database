@@ -1,4 +1,6 @@
 mod data;
+mod error;
+mod fio;
 mod index;
 
 pub fn add(left: usize, right: usize) -> usize {
