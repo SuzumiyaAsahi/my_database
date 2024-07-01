@@ -1,13 +1,37 @@
 use crate::error::{Errors, Result};
 use log::error;
 use parking_lot::RwLock;
-use std::{fs::File, io::Write, os::unix::prelude::FileExt, sync::Arc};
+use std::{
+    fs::{File, OpenOptions},
+    io::Write,
+    os::unix::prelude::FileExt,
+    sync::Arc,
+};
 
 use super::IOManager;
 
 /// FileIO 标准系统文件 IO
 pub struct FileIO {
     fd: Arc<RwLock<File>>,
+}
+
+impl FileIO {
+    pub fn new(file_name: &str) -> Result<Self> {
+        match OpenOptions::new()
+            .create(true)
+            .read(true)
+            .append(true)
+            .open(file_name)
+        {
+            Ok(file) => Ok(Self {
+                fd: Arc::new(RwLock::new(file)),
+            }),
+            Err(e) => {
+                error!("failed to open data file {}", e);
+                Err(Errors::FailedOpenDataFile)
+            }
+        }
+    }
 }
 
 impl IOManager for FileIO {
@@ -39,4 +63,12 @@ impl IOManager for FileIO {
         }
         Ok(())
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_file_io_write() {}
 }

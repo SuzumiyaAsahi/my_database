@@ -11,6 +11,9 @@ pub enum Errors {
 
     #[error("failed to sync data file")]
     FailedSyncDataFile,
+
+    #[error("failed to open data file")]
+    FailedOpenDataFile,
 }
 
 pub type Result<T> = result::Result<T, Errors>;
