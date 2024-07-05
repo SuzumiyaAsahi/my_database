@@ -5,6 +5,7 @@ use std::{
     fs::{File, OpenOptions},
     io::Write,
     os::unix::prelude::FileExt,
+    path::PathBuf,
     sync::Arc,
 };
 
@@ -16,7 +17,7 @@ pub struct FileIO {
 }
 
 impl FileIO {
-    pub fn new(file_name: &str) -> Result<Self> {
+    pub fn new(file_name: PathBuf) -> Result<Self> {
         match OpenOptions::new()
             .create(true)
             .read(true)
@@ -67,8 +68,79 @@ impl IOManager for FileIO {
 
 #[cfg(test)]
 mod tests {
+    use core::sync;
+    use std::fs;
+
     use super::*;
 
     #[test]
-    fn test_file_io_write() {}
+    fn test_file_io_write() {
+        let path = PathBuf::from("/tmp/a.data");
+        let fio_res = FileIO::new(path.clone());
+        assert!(fio_res.is_ok());
+        let fio = fio_res.ok().unwrap();
+
+        let res1 = fio.write("key-a".as_bytes());
+        assert!(res1.is_ok());
+        assert_eq!("key-a".len(), res1.ok().unwrap());
+
+        let res2 = fio.write("key-b".as_bytes());
+        assert!(res2.is_ok());
+        assert_eq!("key-5".len(), res2.ok().unwrap());
+
+        let res3 = fs::remove_file(path.clone());
+        assert!(res3.is_ok());
+    }
+
+    #[test]
+    fn test_file_io_read() {
+        let path = PathBuf::from("/tmp/b.data");
+        let fio_res = FileIO::new(path.clone());
+        assert!(fio_res.is_ok());
+        let fio = fio_res.ok().unwrap();
+
+        let res1 = fio.write("key-a".as_bytes());
+        assert!(res1.is_ok());
+        assert_eq!("key-a".len(), res1.ok().unwrap());
+
+        let res2 = fio.write("key-b".as_bytes());
+        assert!(res2.is_ok());
+        assert_eq!("key-5".len(), res2.ok().unwrap());
+
+        let mut buf1 = [0u8; "key-a".len()];
+        let read_res1 = fio.read(&mut buf1, 0);
+
+        assert!(read_res1.is_ok());
+        assert_eq!("key-a".len(), read_res1.ok().unwrap());
+
+        let mut buf2 = [0u8; 5];
+        let read_res2 = fio.read(&mut buf2, "key-a".len() as u64);
+        assert!(read_res2.is_ok());
+        assert_eq!("key-b".len(), read_res2.ok().unwrap());
+
+        let res3 = fs::remove_file(path.clone());
+        assert!(res3.is_ok());
+    }
+
+    #[test]
+    fn test_io_sync() {
+        let path = PathBuf::from("/tmp/c.data");
+        let fio_res = FileIO::new(path.clone());
+        assert!(fio_res.is_ok());
+        let fio = fio_res.ok().unwrap();
+
+        let res1 = fio.write("key-a".as_bytes());
+        assert!(res1.is_ok());
+        assert_eq!("key-a".len(), res1.ok().unwrap());
+
+        let res2 = fio.write("key-b".as_bytes());
+        assert!(res2.is_ok());
+        assert_eq!("key-5".len(), res2.ok().unwrap());
+
+        let sync_res = fio.sync();
+        assert!(sync_res.is_ok());
+
+        let res3 = fs::remove_file(path.clone());
+        assert!(res3.is_ok());
+    }
 }
