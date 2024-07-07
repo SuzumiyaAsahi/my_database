@@ -20,3 +20,9 @@ pub struct LogRecorPos {
     pub(crate) file_id: u32,
     pub(crate) offset: u64,
 }
+
+impl LogRecord {
+    pub fn encode(&mut self) -> Vec<u8> {
+        todo!()
+    }
+}

@@ -3,6 +3,7 @@ pub mod db;
 mod error;
 mod fio;
 mod index;
+mod options;
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right
