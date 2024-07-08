@@ -1,8 +1,6 @@
-use std::sync::Arc;
-
+use crate::{error::Result, fio};
 use parking_lot::RwLock;
-
-use crate::fio;
+use std::sync::Arc;
 
 /// 数据文件
 pub struct DataFile {
@@ -14,4 +12,20 @@ pub struct DataFile {
 
     /// IO 管理接口
     io_manager: Box<dyn fio::IOManager>,
+}
+
+impl DataFile {
+    pub fn get_file_off(&self) -> u64 {
+        let read_guard = self.write_off.read();
+        *read_guard
+    }
+
+    pub fn get_file_id(&self) -> u32 {
+        let read_guard = self.file_id.read();
+        *read_guard
+    }
+
+    pub fn sync(&self) -> Result<()> {
+        todo!()
+    }
 }
