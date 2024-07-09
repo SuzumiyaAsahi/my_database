@@ -1,6 +1,6 @@
 use crate::{error::Result, fio};
 use parking_lot::RwLock;
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 /// 数据文件
 pub struct DataFile {
@@ -15,6 +15,11 @@ pub struct DataFile {
 }
 
 impl DataFile {
+    /// 创建或打开一个新的数据文件
+    pub fn new(dir_path: PathBuf, file_id: u32) -> Result<DataFile> {
+        todo!()
+    }
+
     pub fn get_file_off(&self) -> u64 {
         let read_guard = self.write_off.read();
         *read_guard
@@ -23,6 +28,10 @@ impl DataFile {
     pub fn get_file_id(&self) -> u32 {
         let read_guard = self.file_id.read();
         *read_guard
+    }
+
+    pub fn write(&self, buf: &[u8]) -> Result<usize> {
+        todo!()
     }
 
     pub fn sync(&self) -> Result<()> {

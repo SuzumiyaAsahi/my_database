@@ -1,7 +1,7 @@
 use crate::{
     data::{
         data_file::DataFile,
-        log_record::{LogRecord, LogRecordType},
+        log_record::{LogRecorPos, LogRecord, LogRecordType},
     },
     error::{Errors, Result},
     options::Options,
@@ -39,7 +39,7 @@ impl Engine {
     }
 
     // 追加写数据到当前活跃文件中
-    fn append_log_record(&self, log_record: &mut LogRecord) -> Result<()> {
+    fn append_log_record(&self, log_record: &mut LogRecord) -> Result<LogRecorPos> {
         let dir_path = self.options.dir_path.clone();
 
         // 输入数据进行编码
@@ -47,7 +47,7 @@ impl Engine {
         let record_len: u64 = enc_record.len() as u64;
 
         // 获取当前活跃文件
-        let active_file = self.active_file.write();
+        let mut active_file = self.active_file.write();
 
         // 判断当前活跃文件是否达到了阈值
         if active_file.get_file_off() + record_len > self.options.data_file_size {
@@ -58,7 +58,27 @@ impl Engine {
 
             // 旧的数据文件存储到 map 中
             let mut older_files = self.older_files.write();
+            let old_file = DataFile::new(dir_path.clone(), current_fid)?;
+            older_files.insert(current_fid, old_file);
+
+            // 打开新的数据文件
+            let new_file = DataFile::new(dir_path.clone(), current_fid + 1)?;
+            *active_file = new_file;
         }
-        todo!()
+
+        // 追加写数据到当前活跃文件中
+        let write_off = active_file.get_file_off();
+        active_file.write(&enc_record)?;
+
+        // 根据配置项决定是否持久化
+        if self.options.sync_writes {
+            active_file.sync()?;
+        }
+
+        // 构造数据索引信息
+        Ok(LogRecorPos {
+            file_id: active_file.get_file_id(),
+            offset: write_off,
+        })
     }
 }
