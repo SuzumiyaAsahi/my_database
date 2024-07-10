@@ -4,6 +4,8 @@ use parking_lot::RwLock;
 
 use crate::{data::log_record::LogRecorPos, index::Indexer};
 
+use crate::error::{Errors, Result};
+
 /// BTree 索引，主要封装了标准库中的 BTreeMap 结构
 pub struct BTree {
     tree: Arc<RwLock<BTreeMap<Vec<u8>, LogRecorPos>>>,
@@ -18,19 +20,24 @@ impl BTree {
 }
 
 impl Indexer for BTree {
-    fn delete(&self, key: Vec<u8>) -> bool {
+    fn delete(&self, key: Vec<u8>) -> Result<()> {
         let mut write_guard = self.tree.write();
         let remove_res = write_guard.remove(&key);
-        remove_res.is_some()
+        match remove_res {
+            Some(_) => Ok(()),
+            None => Err(Errors::IndexDeleteFailed),
+        }
     }
+
     fn get(&self, key: Vec<u8>) -> Option<LogRecorPos> {
         let read_guard = self.tree.write();
         read_guard.get(&key).copied()
     }
-    fn put(&self, key: Vec<u8>, pos: LogRecorPos) -> bool {
+
+    fn put(&self, key: Vec<u8>, pos: LogRecorPos) -> Result<()> {
         let mut write_guard = self.tree.write();
         write_guard.insert(key, pos);
-        true
+        Ok(())
     }
 }
 
@@ -49,7 +56,7 @@ mod tests {
                 offset: 10,
             },
         );
-        assert!(res1);
+        assert!(res1.is_ok());
 
         let res2 = bt.put(
             "aa".as_bytes().to_vec(),
@@ -58,7 +65,7 @@ mod tests {
                 offset: 22,
             },
         );
-        assert!(res2);
+        assert!(res2.is_ok());
     }
 
     #[test]
@@ -71,7 +78,7 @@ mod tests {
                 offset: 10,
             },
         );
-        assert!(res1);
+        assert!(res1.is_ok());
 
         let res2 = bt.put(
             "aa".as_bytes().to_vec(),
@@ -80,15 +87,15 @@ mod tests {
                 offset: 22,
             },
         );
-        assert!(res2);
+        assert!(res2.is_ok());
 
         let del1 = bt.delete("".as_bytes().to_vec());
-        assert!(del1);
+        assert!(del1.is_ok());
 
         let del2 = bt.delete("aa".as_bytes().to_vec());
-        assert!(del2);
+        assert!(del2.is_ok());
 
         let del3 = bt.delete("not exist".as_bytes().to_vec());
-        assert!(!del3);
+        assert!(del3.is_err());
     }
 }

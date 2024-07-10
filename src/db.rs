@@ -4,6 +4,7 @@ use crate::{
         log_record::{LogRecorPos, LogRecord, LogRecordType},
     },
     error::{Errors, Result},
+    index,
     options::Options,
 };
 use bytes::Bytes;
@@ -17,6 +18,8 @@ pub struct Engine {
     active_file: Arc<RwLock<DataFile>>,
     /// 旧的数据文件
     older_files: Arc<RwLock<HashMap<u32, DataFile>>>,
+    /// 数据内存索引
+    index: Box<dyn index::Indexer>,
 }
 
 impl Engine {
@@ -28,13 +31,18 @@ impl Engine {
         }
 
         // 构造 LogRecord
-        let record = LogRecord {
+        let mut record = LogRecord {
             key: key.to_vec(),
             value: value.to_vec(),
             rec_type: LogRecordType::NORMAL,
         };
 
         // 追加写活跃文件到数据文件中
+        let log_record_pos = self.append_log_record(&mut record)?;
+
+        // 更新内存索引
+        self.index.put(key.to_vec(), log_record_pos)?;
+
         Ok(())
     }
 

@@ -17,6 +17,12 @@ pub enum Errors {
 
     #[error("the key is empty")]
     KeyIsEmpty,
+
+    #[error("memory index failed to update")]
+    IndexUpdateFailed,
+
+    #[error("memory index failed to delete")]
+    IndexDeleteFailed,
 }
 
 pub type Result<T> = result::Result<T, Errors>;
