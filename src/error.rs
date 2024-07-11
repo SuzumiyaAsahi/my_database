@@ -23,6 +23,9 @@ pub enum Errors {
 
     #[error("memory index failed to delete")]
     IndexDeleteFailed,
+
+    #[error("key is not found in database")]
+    KeyNotFound,
 }
 
 pub type Result<T> = result::Result<T, Errors>;

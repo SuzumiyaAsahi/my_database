@@ -1,7 +1,7 @@
 use crate::{
     data::{
         data_file::DataFile,
-        log_record::{LogRecorPos, LogRecord, LogRecordType},
+        log_record::{self, LogRecorPos, LogRecord, LogRecordType},
     },
     error::{Errors, Result},
     index,
@@ -46,7 +46,35 @@ impl Engine {
         Ok(())
     }
 
-    // 追加写数据到当前活跃文件中
+    /// 根据 key 获取对应的数据
+    pub fn get(&self, key: Bytes) -> Result<Bytes> {
+        // 判断 key 的有效性
+        if key.is_empty() {
+            return Err(Errors::KeyIsEmpty);
+        }
+
+        // 从内存索引中获取 key 对应的数据信息
+        let pos = self.index.get(key.to_vec());
+
+        if let Some(log_record_pos) = pos {
+            let active_file = self.active_file.read();
+            let older_files = self.older_files.read();
+            let log_record = match active_file.get_file_id() == log_record_pos.file_id {
+                true => active_file.read_log_record(log_record_pos.offset)?,
+
+                false => {
+                    let data_file = older_files.get(&log_record_pos.file_id);
+                    if data_file.is_none() {}
+                }
+            };
+            todo!()
+        } else {
+            // 如果 key 不存在则直接返回
+            return Err(Errors::KeyNotFound);
+        }
+    }
+
+    /// 追加写数据到当前活跃文件中
     fn append_log_record(&self, log_record: &mut LogRecord) -> Result<LogRecorPos> {
         let dir_path = self.options.dir_path.clone();
 

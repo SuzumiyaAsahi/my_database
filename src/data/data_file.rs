@@ -2,6 +2,8 @@ use crate::{error::Result, fio};
 use parking_lot::RwLock;
 use std::{path::PathBuf, sync::Arc};
 
+use super::log_record::LogRecord;
+
 /// 数据文件
 pub struct DataFile {
     /// 数据文件id
@@ -28,6 +30,10 @@ impl DataFile {
     pub fn get_file_id(&self) -> u32 {
         let read_guard = self.file_id.read();
         *read_guard
+    }
+
+    pub fn read_log_record(&self) -> Result<LogRecord> {
+        todo!()
     }
 
     pub fn write(&self, buf: &[u8]) -> Result<usize> {
