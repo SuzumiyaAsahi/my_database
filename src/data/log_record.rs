@@ -6,6 +6,7 @@ pub struct LogRecord {
     pub(crate) rec_type: LogRecordType,
 }
 
+#[derive(PartialEq)]
 pub enum LogRecordType {
     // 正常 put 的数据
     NORMAL,

@@ -32,7 +32,7 @@ impl DataFile {
         *read_guard
     }
 
-    pub fn read_log_record(&self) -> Result<LogRecord> {
+    pub fn read_log_record(&self, offset: u64) -> Result<LogRecord> {
         todo!()
     }
 

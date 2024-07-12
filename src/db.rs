@@ -1,7 +1,7 @@
 use crate::{
     data::{
         data_file::DataFile,
-        log_record::{self, LogRecorPos, LogRecord, LogRecordType},
+        log_record::{LogRecorPos, LogRecord, LogRecordType},
     },
     error::{Errors, Result},
     index,
@@ -56,21 +56,33 @@ impl Engine {
         // 从内存索引中获取 key 对应的数据信息
         let pos = self.index.get(key.to_vec());
 
+        // 从对应的数据文件中获取对应的 LogRecord
         if let Some(log_record_pos) = pos {
             let active_file = self.active_file.read();
             let older_files = self.older_files.read();
             let log_record = match active_file.get_file_id() == log_record_pos.file_id {
                 true => active_file.read_log_record(log_record_pos.offset)?,
-
                 false => {
                     let data_file = older_files.get(&log_record_pos.file_id);
-                    if data_file.is_none() {}
+                    if let Some(data_file) = data_file {
+                        data_file.read_log_record(log_record_pos.offset)?
+                    } else {
+                        // 找不到对应的数据文件，返回错误
+                        return Err(Errors::DataFileNotFound);
+                    }
                 }
             };
-            todo!()
+
+            // 判断 LogRecord 的类型
+            if log_record.rec_type == LogRecordType::DELETED {
+                return Err(Errors::KeyNotFound);
+            }
+
+            // 返回对应的 value 信息
+            Ok(log_record.value.into())
         } else {
             // 如果 key 不存在则直接返回
-            return Err(Errors::KeyNotFound);
+            Err(Errors::KeyNotFound)
         }
     }
 

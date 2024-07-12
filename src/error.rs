@@ -26,6 +26,9 @@ pub enum Errors {
 
     #[error("key is not found in database")]
     KeyNotFound,
+
+    #[error("data file is not found in databases")]
+    DataFileNotFound,
 }
 
 pub type Result<T> = result::Result<T, Errors>;

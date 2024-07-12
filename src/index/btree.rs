@@ -30,7 +30,7 @@ impl Indexer for BTree {
     }
 
     fn get(&self, key: Vec<u8>) -> Option<LogRecorPos> {
-        let read_guard = self.tree.write();
+        let read_guard = self.tree.read();
         read_guard.get(&key).copied()
     }
 
