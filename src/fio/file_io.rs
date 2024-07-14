@@ -68,7 +68,6 @@ impl IOManager for FileIO {
 
 #[cfg(test)]
 mod tests {
-    use core::sync;
     use std::fs;
 
     use super::*;

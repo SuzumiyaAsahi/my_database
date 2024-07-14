@@ -1,10 +1,10 @@
-use std::{collections::BTreeMap, sync::Arc};
-
+use crate::{
+    data::log_record::LogRecorPos,
+    error::{Errors, Result},
+    index::Indexer,
+};
 use parking_lot::RwLock;
-
-use crate::{data::log_record::LogRecorPos, index::Indexer};
-
-use crate::error::{Errors, Result};
+use std::{collections::BTreeMap, sync::Arc};
 
 /// BTree 索引，主要封装了标准库中的 BTreeMap 结构
 pub struct BTree {

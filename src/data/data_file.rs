@@ -1,8 +1,7 @@
+use super::log_record::LogRecord;
 use crate::{error::Result, fio};
 use parking_lot::RwLock;
 use std::{path::PathBuf, sync::Arc};
-
-use super::log_record::LogRecord;
 
 /// 数据文件
 pub struct DataFile {

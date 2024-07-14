@@ -23,6 +23,13 @@ pub struct Engine {
 }
 
 impl Engine {
+    /// 打开 bitcask 存储引擎实例
+    pub fn open(opts: Options) -> Result<Self> {
+        // 校验用户传递过来的配置项
+        check_options(&opts)?;
+        todo!()
+    }
+
     /// 存储 key/value 数据，key 不能为空
     pub fn put(&self, key: Bytes, value: Bytes) -> Result<()> {
         // 判断 key 的有效性
@@ -60,8 +67,12 @@ impl Engine {
         if let Some(log_record_pos) = pos {
             let active_file = self.active_file.read();
             let older_files = self.older_files.read();
+
+            // 查看活跃文件中是否是对应的数据文件
             let log_record = match active_file.get_file_id() == log_record_pos.file_id {
                 true => active_file.read_log_record(log_record_pos.offset)?,
+
+                // 如果找不到，就去旧的活跃文件中去找
                 false => {
                     let data_file = older_files.get(&log_record_pos.file_id);
                     if let Some(data_file) = data_file {
@@ -129,4 +140,22 @@ impl Engine {
             offset: write_off,
         })
     }
+}
+
+fn check_options(opts: &Options) -> Result<()> {
+    let dir_path = opts.dir_path.to_str();
+    match dir_path {
+        None => return Err(Errors::DirPathIsEmpty),
+        Some(dir_path) => {
+            if dir_path.is_empty() {
+                return Err(Errors::DirPathIsEmpty);
+            }
+        }
+    }
+
+    if opts.data_file_size == 0 {
+        return Err(Errors::DataFileSizeTooSmall);
+    }
+
+    Ok(())
 }

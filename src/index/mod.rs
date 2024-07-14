@@ -1,6 +1,5 @@
 pub mod btree;
-use crate::data::log_record::LogRecorPos;
-use crate::error::Result;
+use crate::{data::log_record::LogRecorPos, error::Result};
 
 /// Indexer 抽象索引接口，后续如果想要接入其他的数据结构，则直接实现这个接口即可
 pub trait Indexer: Sync + Send {
