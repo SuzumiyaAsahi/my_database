@@ -8,8 +8,9 @@ use crate::{
     options::Options,
 };
 use bytes::Bytes;
+use log::warn;
 use parking_lot::RwLock;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
 
 /// bitcask 存储引擎实例结构体
 pub struct Engine {
@@ -27,6 +28,21 @@ impl Engine {
     pub fn open(opts: Options) -> Result<Self> {
         // 校验用户传递过来的配置项
         check_options(&opts)?;
+
+        let options = opts.clone();
+
+        // 判断数据目录是够存在，如果不存在的话则创建这个目录
+        let dir_path = options.dir_path.clone();
+
+        if !dir_path.is_dir() {
+            if let Err(e) = fs::create_dir_all(dir_path) {
+                warn!("create database directory err: {}", e);
+                return Err(Errors::FailedCreateDatabaseDir);
+            }
+        }
+
+        // 加载数据文件
+
         todo!()
     }
 
@@ -142,6 +158,15 @@ impl Engine {
     }
 }
 
+/// 从数据目录中加载数据文件
+fn load_data_files(dir_path: PathBuf) -> Result<Vec<DataFile>> {
+    // 读取数据目录
+    let dir = fs::read_dir(dir_path.clone());
+
+    todo!()
+}
+
+/// 校验用户传递过来的配置项
 fn check_options(opts: &Options) -> Result<()> {
     let dir_path = opts.dir_path.to_str();
     match dir_path {

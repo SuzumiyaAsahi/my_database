@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+#[derive(Clone, Debug)]
 pub struct Options {
     /// 数据库目录
     pub dir_path: PathBuf,

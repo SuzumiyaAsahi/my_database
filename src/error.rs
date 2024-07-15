@@ -35,6 +35,12 @@ pub enum Errors {
 
     #[error("database data file size must be greater than 0")]
     DataFileSizeTooSmall,
+
+    #[error("failed to create the database diretory")]
+    FailedCreateDatabaseDir,
+
+    #[error("failed to create the database diretory")]
+    FailedToReadDataDir,
 }
 
 pub type Result<T> = result::Result<T, Errors>;
