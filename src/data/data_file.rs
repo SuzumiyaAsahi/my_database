@@ -3,6 +3,8 @@ use crate::{error::Result, fio};
 use parking_lot::RwLock;
 use std::{path::PathBuf, sync::Arc};
 
+pub const DATA_FILE_NAME_SUFFIX: &str = ".data";
+
 /// 数据文件
 pub struct DataFile {
     /// 数据文件id

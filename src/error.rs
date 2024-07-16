@@ -39,8 +39,8 @@ pub enum Errors {
     #[error("failed to create the database diretory")]
     FailedCreateDatabaseDir,
 
-    #[error("failed to create the database diretory")]
-    FailedToReadDataDir,
+    #[error("failed to read the database diretory")]
+    FailedReadDatabaseDir,
 }
 
 pub type Result<T> = result::Result<T, Errors>;
