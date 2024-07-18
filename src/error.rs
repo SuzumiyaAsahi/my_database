@@ -41,6 +41,16 @@ pub enum Errors {
 
     #[error("failed to read the database diretory")]
     FailedReadDatabaseDir,
+
+    #[error("the database directory maybe corrupted")]
+    DataDirtoryCorrupted,
+
+    #[error("the OsString may have invalid UTF-8 character")]
+    OsStringInvalidUTF8,
+
+    // need to remake
+    #[error("there is something wrong in DirEntry")]
+    DirEntryError,
 }
 
 pub type Result<T> = result::Result<T, Errors>;

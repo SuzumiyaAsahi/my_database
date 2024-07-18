@@ -170,10 +170,14 @@ fn load_data_files(dir_path: PathBuf) -> Result<Vec<DataFile>> {
                 // 拿到文件名
                 let file_os_str = entry.file_name();
 
-                let file_name = file_os_str.to_str().unwrap();
-
-                // 判断文件名是否是以 .data 结尾
-                if file_name.ends_with(DATA_FILE_NAME_SUFFIX) {}
+                if let Some(file_name) = file_os_str.to_str() {
+                    // 判断文件名是否是以 .data 结尾
+                    if file_name.ends_with(DATA_FILE_NAME_SUFFIX) {}
+                } else {
+                    return Err(Errors::OsStringInvalidUTF8);
+                }
+            } else {
+                return Err(Errors::DirEntryError);
             }
         }
     } else {
