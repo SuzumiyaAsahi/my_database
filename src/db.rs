@@ -164,6 +164,7 @@ fn load_data_files(dir_path: PathBuf) -> Result<Vec<DataFile>> {
     let dir = fs::read_dir(dir_path.clone());
 
     if let Ok(dir) = dir {
+        let mut file_ids: Vec<u32> = Vec::new();
         let mut data_files: Vec<DataFile> = Vec::new();
         for file in dir {
             if let Ok(entry) = file {
@@ -172,7 +173,14 @@ fn load_data_files(dir_path: PathBuf) -> Result<Vec<DataFile>> {
 
                 if let Some(file_name) = file_os_str.to_str() {
                     // 判断文件名是否是以 .data 结尾
-                    if file_name.ends_with(DATA_FILE_NAME_SUFFIX) {}
+                    if file_name.ends_with(DATA_FILE_NAME_SUFFIX) {
+                        let split_names: Vec<&str> = file_name.split(".").collect();
+                        let file_id = match split_names[0].parse::<u32>() {
+                            Ok(fid) => fid,
+                            Err(_) => return Err(Errors::DataDirtoryCorrupted),
+                        };
+                        file_ids.push(file_id);
+                    }
                 } else {
                     return Err(Errors::OsStringInvalidUTF8);
                 }
@@ -180,6 +188,14 @@ fn load_data_files(dir_path: PathBuf) -> Result<Vec<DataFile>> {
                 return Err(Errors::DirEntryError);
             }
         }
+
+        // 如果没有数据文件，则直接撤回
+        if file_ids.is_empty() {
+            return Ok(data_files);
+        }
+
+        // 对文件 id 进行排序，从小到大进行加载
+        file_ids.sort();
     } else {
         return Err(Errors::FailedReadDatabaseDir);
     }
