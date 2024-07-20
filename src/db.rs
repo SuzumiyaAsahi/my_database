@@ -35,13 +35,33 @@ impl Engine {
         let dir_path = options.dir_path.clone();
 
         if !dir_path.is_dir() {
-            if let Err(e) = fs::create_dir_all(dir_path) {
+            if let Err(e) = fs::create_dir_all(dir_path.clone()) {
                 warn!("create database directory err: {}", e);
                 return Err(Errors::FailedCreateDatabaseDir);
             }
         }
 
         // 加载数据文件
+        let mut data_files = load_data_files(dir_path.clone())?;
+
+        // 设置 file id 信息
+        let mut file_ids = Vec::new();
+        for v in data_files.iter() {
+            file_ids.push(v.get_file_id());
+        }
+
+        // 因为我们这里把 data_files 里面的文件 id 都拍好了顺序
+        // 文件号最大的，也就是 Vec 中最后的文件 id 就是活跃文件 id
+        // 其余的都是不活跃文件 id
+
+        // 将旧的数据文件保存到 older_files 中
+        let mut older_files = HashMap::new();
+        if data_files.len() > 1 {
+            for _ in 0..data_files.len() - 1 {
+                let file = data_files.pop().unwrap();
+                older_files.insert(file.get_file_id(), file);
+            }
+        }
 
         todo!()
     }
@@ -196,11 +216,17 @@ fn load_data_files(dir_path: PathBuf) -> Result<Vec<DataFile>> {
 
         // 对文件 id 进行排序，从小到大进行加载
         file_ids.sort();
-    } else {
-        return Err(Errors::FailedReadDatabaseDir);
+
+        // 遍历所有文件 id，依次打开对应的数据文件
+        for file_id in file_ids {
+            let data_file = DataFile::new(dir_path.clone(), file_id)?;
+            data_files.push(data_file);
+        }
+
+        return Ok(data_files);
     }
 
-    todo!()
+    Err(Errors::FailedReadDatabaseDir)
 }
 
 /// 校验用户传递过来的配置项
