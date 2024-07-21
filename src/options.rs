@@ -10,4 +10,16 @@ pub struct Options {
 
     /// 是否每次写都持久化
     pub sync_writes: bool,
+
+    /// 索引类型
+    pub index_type: IndexType,
+}
+
+#[derive(Debug, Clone)]
+pub enum IndexType {
+    /// BTree 索引
+    BTree,
+
+    /// 跳表索引
+    SkipList,
 }

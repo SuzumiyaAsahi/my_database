@@ -12,6 +12,8 @@ use log::warn;
 use parking_lot::RwLock;
 use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
 
+const INITIAL_FILE_ID: u32 = 0;
+
 /// bitcask 存储引擎实例结构体
 pub struct Engine {
     options: Arc<Options>,
@@ -21,6 +23,8 @@ pub struct Engine {
     older_files: Arc<RwLock<HashMap<u32, DataFile>>>,
     /// 数据内存索引
     index: Box<dyn index::Indexer>,
+    /// 数据库启动时的文件 id，只用于加载索引时使用，不能在其他的地方更新或使用
+    file_ids: Vec<u32>,
 }
 
 impl Engine {
@@ -50,7 +54,7 @@ impl Engine {
             file_ids.push(v.get_file_id());
         }
 
-        // 因为我们这里把 data_files 里面的文件 id 都拍好了顺序
+        // 因为我们这里把 data_files 里面的文件 id 都排好了顺序
         // 文件号最大的，也就是 Vec 中最后的文件 id 就是活跃文件 id
         // 其余的都是不活跃文件 id
 
@@ -62,6 +66,12 @@ impl Engine {
                 older_files.insert(file.get_file_id(), file);
             }
         }
+
+        // 拿到当前活跃文件，即列表中最后一个文件
+        let active_file = match data_files.pop() {
+            Some(v) => v,
+            None => DataFile::new(dir_path.clone(), INITIAL_FILE_ID)?,
+        };
 
         todo!()
     }
