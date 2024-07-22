@@ -9,10 +9,10 @@ pub struct LogRecord {
 #[derive(PartialEq)]
 pub enum LogRecordType {
     // 正常 put 的数据
-    NORMAL,
+    Normal,
 
     // 被删除的数据标识，墓碑值
-    DELETED,
+    Deleted,
 }
 
 /// 数据位置索引信息， 描述数据存储到了哪个位置

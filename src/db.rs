@@ -73,7 +73,15 @@ impl Engine {
             None => DataFile::new(dir_path.clone(), INITIAL_FILE_ID)?,
         };
 
-        todo!()
+        let engine = Self {
+            options: Arc::new(opts),
+            active_file: Arc::new(RwLock::new(active_file)),
+            older_files: Arc::new(RwLock::new(older_files)),
+            index: Box::new(index::new_indexer(options.index_type)),
+            file_ids,
+        };
+
+        Ok(engine)
     }
 
     /// 存储 key/value 数据，key 不能为空
@@ -87,7 +95,7 @@ impl Engine {
         let mut record = LogRecord {
             key: key.to_vec(),
             value: value.to_vec(),
-            rec_type: LogRecordType::NORMAL,
+            rec_type: LogRecordType::Normal,
         };
 
         // 追加写活跃文件到数据文件中
@@ -131,7 +139,7 @@ impl Engine {
             };
 
             // 判断 LogRecord 的类型
-            if log_record.rec_type == LogRecordType::DELETED {
+            if log_record.rec_type == LogRecordType::Deleted {
                 return Err(Errors::KeyNotFound);
             }
 
@@ -185,6 +193,25 @@ impl Engine {
             file_id: active_file.get_file_id(),
             offset: write_off,
         })
+    }
+
+    /// 从数据文件中加载内存索引
+    /// 遍历数据文件中的内容，并依次处理其中的记录
+    fn load_index_from_data_files(&mut self) -> Result<()> {
+        // 数据文件为空，直接返回
+        if self.file_ids.is_empty() {
+            return Ok(());
+        }
+
+        let active_file = self.active_file.read();
+        let older_files = self.older_files.read();
+
+        // 遍历每个文件 id，取出对应的数据文件，并加载其中的数据
+        for (i, file_id) in self.file_ids.iter().enumerate() {
+            let mut offset = 0;
+            loop {}
+        }
+        todo!()
     }
 }
 
