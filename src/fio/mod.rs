@@ -1,5 +1,7 @@
 pub mod file_io;
 use crate::error::Result;
+use file_io::FileIO;
+use std::path::PathBuf;
 
 /// 抽象 IO 管理接口，可以接入不同的 IO 类型， 目前支持标准文件 IO
 
@@ -12,4 +14,8 @@ pub trait IOManager: Sync + Send {
 
     /// 持久化数据
     fn sync(&self) -> Result<()>;
+}
+
+pub fn new_io_manager(file_name: PathBuf) -> Result<impl IOManager> {
+    FileIO::new(file_name)
 }
