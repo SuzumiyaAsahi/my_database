@@ -73,13 +73,16 @@ impl Engine {
             None => DataFile::new(dir_path.clone(), INITIAL_FILE_ID)?,
         };
 
-        let engine = Self {
+        let mut engine = Self {
             options: Arc::new(opts),
             active_file: Arc::new(RwLock::new(active_file)),
             older_files: Arc::new(RwLock::new(older_files)),
             index: Box::new(index::new_indexer(options.index_type)),
             file_ids,
         };
+
+        // 从数据文件中加载索引
+        engine.load_index_from_data_files()?;
 
         Ok(engine)
     }
@@ -95,7 +98,7 @@ impl Engine {
         let mut record = LogRecord {
             key: key.to_vec(),
             value: value.to_vec(),
-            rec_type: LogRecordType::Normal,
+            rec_type: LogRecordType::NORMAL,
         };
 
         // 追加写活跃文件到数据文件中
@@ -124,13 +127,13 @@ impl Engine {
 
             // 查看活跃文件中是否是对应的数据文件
             let log_record = match active_file.get_file_id() == log_record_pos.file_id {
-                true => active_file.read_log_record(log_record_pos.offset)?,
+                true => active_file.read_log_record(log_record_pos.offset)?.record,
 
                 // 如果找不到，就去旧的活跃文件中去找
                 false => {
                     let data_file = older_files.get(&log_record_pos.file_id);
                     if let Some(data_file) = data_file {
-                        data_file.read_log_record(log_record_pos.offset)?
+                        data_file.read_log_record(log_record_pos.offset)?.record
                     } else {
                         // 找不到对应的数据文件，返回错误
                         return Err(Errors::DataFileNotFound);
@@ -139,7 +142,7 @@ impl Engine {
             };
 
             // 判断 LogRecord 的类型
-            if log_record.rec_type == LogRecordType::Deleted {
+            if log_record.rec_type == LogRecordType::DELETED {
                 return Err(Errors::KeyNotFound);
             }
 
@@ -209,9 +212,50 @@ impl Engine {
         // 遍历每个文件 id，取出对应的数据文件，并加载其中的数据
         for (i, file_id) in self.file_ids.iter().enumerate() {
             let mut offset = 0;
-            loop {}
+            loop {
+                let log_record_res = match *file_id == active_file.get_file_id() {
+                    true => active_file.read_log_record(offset),
+                    false => {
+                        let datafile = older_files.get(file_id).unwrap();
+                        datafile.read_log_record(offset)
+                    }
+                };
+
+                let (log_record, size) = match log_record_res {
+                    Ok(result) => (result.record, result.size),
+                    Err(e) => {
+                        if e == Errors::ReadDataFileEOF {
+                            break;
+                        } else {
+                            return Err(e);
+                        }
+                    }
+                };
+
+                // 构建内存索引
+                let log_record_pos = LogRecorPos {
+                    file_id: *file_id,
+                    offset,
+                };
+
+                match log_record.rec_type {
+                    LogRecordType::NORMAL => {
+                        self.index.put(log_record.key.to_vec(), log_record_pos)?
+                    }
+
+                    LogRecordType::DELETED => self.index.delete(log_record.key.to_vec())?,
+                };
+
+                // 递增活跃文件的 offset
+                offset += size;
+            }
+
+            // 设置活跃文件的 offset
+            if i == self.file_ids.len() - 1 {
+                active_file.set_write_off(offset);
+            }
         }
-        todo!()
+        Ok(())
     }
 }
 

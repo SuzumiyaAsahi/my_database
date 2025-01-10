@@ -1,7 +1,7 @@
 use std::result;
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq)]
 pub enum Errors {
     #[error("failed to read from data file")]
     FailedReadFromDataFile,
@@ -51,6 +51,9 @@ pub enum Errors {
     // need to remake
     #[error("there is something wrong in DirEntry")]
     DirEntryError,
+
+    #[error("read data file eroor")]
+    ReadDataFileEOF,
 }
 
 pub type Result<T> = result::Result<T, Errors>;

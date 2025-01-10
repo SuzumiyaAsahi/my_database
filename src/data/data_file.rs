@@ -1,4 +1,4 @@
-use super::log_record::LogRecord;
+use super::log_record::{LogRecord, ReadLogRecord};
 use crate::{error::Result, fio};
 use parking_lot::RwLock;
 use std::{path::PathBuf, sync::Arc};
@@ -28,12 +28,17 @@ impl DataFile {
         *read_guard
     }
 
+    pub fn set_write_off(&self, offset: u64) {
+        let mut write_guard = self.write_off.write();
+        *write_guard = offset;
+    }
+
     pub fn get_file_id(&self) -> u32 {
         let read_guard = self.file_id.read();
         *read_guard
     }
 
-    pub fn read_log_record(&self, offset: u64) -> Result<LogRecord> {
+    pub fn read_log_record(&self, offset: u64) -> Result<ReadLogRecord> {
         todo!()
     }
 
