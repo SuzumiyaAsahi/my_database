@@ -110,6 +110,35 @@ impl Engine {
         Ok(())
     }
 
+    /// 根据 key 删除对应的数据
+    pub fn delete(&self, key: Bytes) -> Result<()> {
+        // 判断 key 的有效性
+        if key.is_empty() {
+            return Err(Errors::KeyIsEmpty);
+        }
+
+        // 从内存索引当中取出对应的数据，不存在的话直接返回
+        let pos = self.index.get(key.to_vec());
+
+        if pos.is_none() {
+            return Ok(());
+        }
+
+        // 构建 LogRecord，标志其是被删除的
+        let mut record = LogRecord {
+            key: key.to_vec(),
+            value: Default::default(),
+            rec_type: LogRecordType::DELETED,
+        };
+
+        // 写入到数据文件当中
+        self.append_log_record(&mut record)?;
+
+        // 删除内存索引中对应的 key
+        self.index.delete(key.to_vec())?;
+
+        Ok(())
+    }
     /// 根据 key 获取对应的数据
     pub fn get(&self, key: Bytes) -> Result<Bytes> {
         // 判断 key 的有效性
