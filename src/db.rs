@@ -98,7 +98,7 @@ impl Engine {
         let mut record = LogRecord {
             key: key.to_vec(),
             value: value.to_vec(),
-            rec_type: LogRecordType::NORMAL,
+            rec_type: LogRecordType::Normal,
         };
 
         // 追加写活跃文件到数据文件中
@@ -128,7 +128,7 @@ impl Engine {
         let mut record = LogRecord {
             key: key.to_vec(),
             value: Default::default(),
-            rec_type: LogRecordType::DELETED,
+            rec_type: LogRecordType::Deleted,
         };
 
         // 写入到数据文件当中
@@ -171,7 +171,7 @@ impl Engine {
             };
 
             // 判断 LogRecord 的类型
-            if log_record.rec_type == LogRecordType::DELETED {
+            if log_record.rec_type == LogRecordType::Deleted {
                 return Err(Errors::KeyNotFound);
             }
 
@@ -268,11 +268,11 @@ impl Engine {
                 };
 
                 match log_record.rec_type {
-                    LogRecordType::NORMAL => {
+                    LogRecordType::Normal => {
                         self.index.put(log_record.key.to_vec(), log_record_pos)?
                     }
 
-                    LogRecordType::DELETED => self.index.delete(log_record.key.to_vec())?,
+                    LogRecordType::Deleted => self.index.delete(log_record.key.to_vec())?,
                 };
 
                 // 递增活跃文件的 offset

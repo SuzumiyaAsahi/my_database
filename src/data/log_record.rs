@@ -9,10 +9,20 @@ pub struct LogRecord {
 #[derive(PartialEq)]
 pub enum LogRecordType {
     // 正常 put 的数据
-    NORMAL,
+    Normal,
 
     // 被删除的数据标识，墓碑值
-    DELETED,
+    Deleted,
+}
+
+impl LogRecordType {
+    pub fn from_u8(v: u8) -> Self {
+        match v {
+            1 => LogRecordType::Normal,
+            2 => LogRecordType::Deleted,
+            _ => panic!("unknown log record type"),
+        }
+    }
 }
 
 /// 数据位置索引信息， 描述数据存储到了哪个位置
@@ -32,10 +42,14 @@ impl LogRecord {
     pub fn encode(&mut self) -> Vec<u8> {
         todo!()
     }
+
+    pub fn get_crc(&mut self) -> u32 {
+        todo!()
+    }
 }
 
 /// 获得 LogRecord header 部分的最大长度
 pub fn max_log_record_header_size() -> usize {
     use prost::length_delimiter_len;
-    size_of::<u8>() + length_delimiter_len(std::u32::MAX as usize) * 2
+    size_of::<u8>() + length_delimiter_len(u32::MAX as usize) * 2
 }
