@@ -58,6 +58,8 @@ impl Engine {
         // 文件号最大的，也就是 Vec 中最后的文件 id 就是活跃文件 id
         // 其余的都是不活跃文件 id
 
+        data_files.reverse();
+
         // 将旧的数据文件保存到 older_files 中
         let mut older_files = HashMap::new();
         if data_files.len() > 1 {

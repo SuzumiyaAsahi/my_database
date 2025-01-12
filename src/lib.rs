@@ -3,11 +3,15 @@ pub mod db;
 mod error;
 mod fio;
 mod index;
-mod options;
+pub mod options;
+mod util;
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right
 }
+
+#[cfg(test)]
+mod db_tests;
 
 #[cfg(test)]
 mod tests {
