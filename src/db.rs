@@ -1,7 +1,7 @@
 use crate::{
     data::{
         data_file::{DataFile, DATA_FILE_NAME_SUFFIX},
-        log_record::{LogRecorPos, LogRecord, LogRecordType},
+        log_record::{LogRecord, LogRecordPos, LogRecordType},
     },
     error::{Errors, Result},
     index,
@@ -22,7 +22,7 @@ pub struct Engine {
     /// 旧的数据文件
     older_files: Arc<RwLock<HashMap<u32, DataFile>>>,
     /// 数据内存索引
-    index: Box<dyn index::Indexer>,
+    pub(crate) index: Box<dyn index::Indexer>,
     /// 数据库启动时的文件 id，只用于加载索引时使用，不能在其他的地方更新或使用
     file_ids: Vec<u32>,
 }
@@ -186,7 +186,7 @@ impl Engine {
     }
 
     /// 追加写数据到当前活跃文件中
-    fn append_log_record(&self, log_record: &mut LogRecord) -> Result<LogRecorPos> {
+    fn append_log_record(&self, log_record: &mut LogRecord) -> Result<LogRecordPos> {
         let dir_path = self.options.dir_path.clone();
 
         // 输入数据进行编码
@@ -223,7 +223,7 @@ impl Engine {
         }
 
         // 构造数据索引信息
-        Ok(LogRecorPos {
+        Ok(LogRecordPos {
             file_id: active_file.get_file_id(),
             offset: write_off,
         })
@@ -264,7 +264,7 @@ impl Engine {
                 };
 
                 // 构建内存索引
-                let log_record_pos = LogRecorPos {
+                let log_record_pos = LogRecordPos {
                     file_id: *file_id,
                     offset,
                 };

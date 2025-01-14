@@ -1,17 +1,18 @@
-use bytes::Bytes;
-use std::path::PathBuf;
-
 use crate::{
     db::Engine,
     error::Errors,
     options::Options,
     util::rand_kv::{get_test_key, get_test_value},
 };
+use bytes::Bytes;
+use std::path::PathBuf;
 
 #[test]
 fn test_engine_put() {
-    let mut opts = Options::default();
-    opts.dir_path = PathBuf::from("/tmp/bitcask-rs-put");
+    let mut opts = Options {
+        dir_path: PathBuf::from("/tmp/bitcask-rs-put"),
+        ..Default::default()
+    };
     opts.data_file_size = 64 * 1024 * 1024;
     let engine = Engine::open(opts.clone()).expect("failed to open engine");
 
@@ -20,7 +21,7 @@ fn test_engine_put() {
     assert!(res1.is_ok());
     let res2 = engine.get(get_test_key(11));
     assert!(res2.is_ok());
-    assert!(res2.unwrap().len() > 0);
+    assert!(!res2.unwrap().is_empty());
 
     // 2.重复 Put key 相同的数据
     let res3 = engine.put(get_test_key(22), get_test_value(22));
@@ -63,8 +64,10 @@ fn test_engine_put() {
 
 #[test]
 fn test_engine_get() {
-    let mut opts = Options::default();
-    opts.dir_path = PathBuf::from("/tmp/bitcask-rs-get");
+    let mut opts = Options {
+        dir_path: PathBuf::from("/tmp/bitcask-rs-put"),
+        ..Default::default()
+    };
     opts.data_file_size = 64 * 1024 * 1024;
     let engine = Engine::open(opts.clone()).expect("failed to open engine");
 
@@ -73,7 +76,7 @@ fn test_engine_get() {
     assert!(res1.is_ok());
     let res2 = engine.get(get_test_key(111));
     assert!(res2.is_ok());
-    assert!(res2.unwrap().len() > 0);
+    assert!(!res2.unwrap().is_empty());
 
     // 2.读取一个不存在的 key
     let res3 = engine.get(Bytes::from("not existed key"));
@@ -120,8 +123,10 @@ fn test_engine_get() {
 
 #[test]
 fn test_engine_delete() {
-    let mut opts = Options::default();
-    opts.dir_path = PathBuf::from("/tmp/bitcask-rs-delete");
+    let mut opts = Options {
+        dir_path: PathBuf::from("/tmp/bitcask-rs-put"),
+        ..Default::default()
+    };
     opts.data_file_size = 64 * 1024 * 1024;
     let engine = Engine::open(opts.clone()).expect("failed to open engine");
 

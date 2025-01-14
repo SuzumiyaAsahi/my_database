@@ -3,6 +3,7 @@ pub mod db;
 mod error;
 mod fio;
 mod index;
+pub mod iterator;
 pub mod options;
 mod util;
 
