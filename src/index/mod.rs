@@ -1,4 +1,6 @@
 pub mod btree;
+use bytes::Bytes;
+
 use crate::{
     data::log_record::LogRecordPos,
     error::Result,
@@ -15,6 +17,9 @@ pub trait Indexer: Sync + Send {
 
     /// 根据 key 删除对应的索引信息信息
     fn delete(&self, key: Vec<u8>) -> Result<()>;
+
+    /// 获取索引存储的所有的 key
+    fn list_keys(&self) -> Result<Vec<Bytes>>;
 
     /// 返回索引迭代器
     fn iterator(&self, options: IteratorOptions) -> Box<dyn IndexIterator>;

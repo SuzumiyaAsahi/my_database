@@ -89,6 +89,18 @@ impl Engine {
         Ok(engine)
     }
 
+    /// 关闭数据库，释放相关资源
+    pub fn close(&self) -> Result<()> {
+        let read_guard = self.active_file.read();
+        read_guard.sync()
+    }
+
+    /// 持久化当前活跃文件
+    pub fn sync(&self) -> Result<()> {
+        let read_guard = self.active_file.read();
+        read_guard.sync()
+    }
+
     /// 存储 key/value 数据，key 不能为空
     pub fn put(&self, key: Bytes, value: Bytes) -> Result<()> {
         // 判断 key 的有效性
@@ -151,6 +163,11 @@ impl Engine {
         // 从内存索引中获取 key 对应的数据信息
         let pos = self.index.get(key.to_vec());
 
+        self.get_value_by_position(pos.as_ref())
+    }
+
+    /// 根据索引信息获取 value
+    pub(crate) fn get_value_by_position(&self, pos: Option<&LogRecordPos>) -> Result<Bytes> {
         // 从对应的数据文件中获取对应的 LogRecord
         if let Some(log_record_pos) = pos {
             let active_file = self.active_file.read();
@@ -184,7 +201,6 @@ impl Engine {
             Err(Errors::KeyNotFound)
         }
     }
-
     /// 追加写数据到当前活跃文件中
     fn append_log_record(&self, log_record: &mut LogRecord) -> Result<LogRecordPos> {
         let dir_path = self.options.dir_path.clone();

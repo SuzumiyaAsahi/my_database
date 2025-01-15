@@ -4,6 +4,7 @@ use crate::{
     index::Indexer,
     options::IteratorOptions,
 };
+use bytes::Bytes;
 use parking_lot::RwLock;
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -62,6 +63,15 @@ impl Indexer for BTree {
                 options,
             }
         })
+    }
+
+    fn list_keys(&self) -> Result<Vec<bytes::Bytes>> {
+        let read_guard = self.tree.read();
+        let mut keys = Vec::with_capacity(read_guard.len());
+        for (k, _) in read_guard.iter() {
+            keys.push(Bytes::copy_from_slice(k));
+        }
+        Ok(keys)
     }
 }
 
