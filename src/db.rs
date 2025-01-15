@@ -9,8 +9,13 @@ use crate::{
 };
 use bytes::Bytes;
 use log::warn;
-use parking_lot::RwLock;
-use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
+use parking_lot::{Mutex, RwLock};
+use std::{
+    collections::HashMap,
+    fs,
+    path::PathBuf,
+    sync::{atomic::AtomicUsize, Arc},
+};
 
 const INITIAL_FILE_ID: u32 = 0;
 
@@ -25,6 +30,10 @@ pub struct Engine {
     pub(crate) index: Box<dyn index::Indexer>,
     /// 数据库启动时的文件 id，只用于加载索引时使用，不能在其他的地方更新或使用
     file_ids: Vec<u32>,
+    /// 事务提交保证串行化
+    pub(crate) batch_commit_lock: Mutex<()>,
+    /// 事务序列号，全局递增
+    pub(crate) seq_no: Arc<AtomicUsize>,
 }
 
 impl Engine {
@@ -81,6 +90,8 @@ impl Engine {
             older_files: Arc::new(RwLock::new(older_files)),
             index: Box::new(index::new_indexer(options.index_type)),
             file_ids,
+            batch_commit_lock: Mutex::new(()),
+            seq_no: Arc::new(AtomicUsize::new(0)),
         };
 
         // 从数据文件中加载索引
@@ -202,9 +213,8 @@ impl Engine {
         }
     }
     /// 追加写数据到当前活跃文件中
-    fn append_log_record(&self, log_record: &mut LogRecord) -> Result<LogRecordPos> {
+    pub(crate) fn append_log_record(&self, log_record: &mut LogRecord) -> Result<LogRecordPos> {
         let dir_path = self.options.dir_path.clone();
-
         // 输入数据进行编码
         let enc_record = log_record.encode();
         let record_len: u64 = enc_record.len() as u64;

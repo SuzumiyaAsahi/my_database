@@ -1,3 +1,4 @@
+mod batch;
 mod data;
 pub mod db;
 mod error;

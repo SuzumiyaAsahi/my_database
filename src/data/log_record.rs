@@ -12,11 +12,14 @@ pub struct LogRecord {
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum LogRecordType {
-    // 正常 put 的数据
-    Normal,
+    /// 正常 put 的数据
+    Normal = 0,
 
-    // 被删除的数据标识，墓碑值
-    Deleted,
+    /// 被删除的数据标识，墓碑值
+    Deleted = 1,
+
+    /// 事务完成的标识
+    TXNFINISHED = 2,
 }
 
 impl LogRecordType {
@@ -24,6 +27,7 @@ impl LogRecordType {
         match v {
             0 => LogRecordType::Normal,
             1 => LogRecordType::Deleted,
+            2 => LogRecordType::TXNFINISHED,
             _ => panic!("unknown log record type"),
         }
     }
