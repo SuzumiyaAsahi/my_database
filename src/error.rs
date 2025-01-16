@@ -63,6 +63,9 @@ pub enum Errors {
 
     #[error("update index error")]
     UpdateIndexError,
+
+    #[error("merge is in progress, try again later")]
+    MergeInProgress,
 }
 
 pub type Result<T> = result::Result<T, Errors>;

@@ -22,11 +22,11 @@ const INITIAL_FILE_ID: u32 = 0;
 
 /// bitcask 存储引擎实例结构体
 pub struct Engine {
-    options: Arc<Options>,
+    pub(crate) options: Arc<Options>,
     /// 当前活跃数据文件
-    active_file: Arc<RwLock<DataFile>>,
+    pub(crate) active_file: Arc<RwLock<DataFile>>,
     /// 旧的数据文件
-    older_files: Arc<RwLock<HashMap<u32, DataFile>>>,
+    pub(crate) older_files: Arc<RwLock<HashMap<u32, DataFile>>>,
     /// 数据内存索引
     pub(crate) index: Box<dyn index::Indexer>,
     /// 数据库启动时的文件 id，只用于加载索引时使用，不能在其他的地方更新或使用
@@ -35,6 +35,8 @@ pub struct Engine {
     pub(crate) batch_commit_lock: Mutex<()>,
     /// 事务序列号，全局递增
     pub(crate) seq_no: Arc<AtomicUsize>,
+    /// 防止多个线程同时 merge
+    pub(crate) merging_lock: Mutex<()>,
 }
 
 impl Engine {
@@ -93,6 +95,7 @@ impl Engine {
             file_ids,
             batch_commit_lock: Mutex::new(()),
             seq_no: Arc::new(AtomicUsize::new(1)),
+            merging_lock: Mutex::new(()),
         };
 
         // 从数据文件中加载索引
