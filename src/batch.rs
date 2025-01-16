@@ -1,6 +1,6 @@
-use bytes::{Bytes, BytesMut};
+use bytes::{BufMut, Bytes, BytesMut};
 use parking_lot::Mutex;
-use prost::encode_length_delimiter;
+use prost::{decode_length_delimiter, encode_length_delimiter};
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
@@ -11,6 +11,7 @@ use crate::{
 };
 
 const TXN_FINISHED: &[u8] = "legacy".as_bytes();
+pub(crate) const NON_TRANSCATION_SEQ_NO: usize = 0;
 
 pub struct WriteBatch<'a> {
     /// 暂存用户写入的数据
@@ -116,7 +117,7 @@ impl WriteBatch<'_> {
             rec_type: LogRecordType::TXNFINISHED,
         };
 
-        self.engine.append_log_record(&mut finish_record);
+        self.engine.append_log_record(&mut finish_record)?;
 
         // 如果配置了持久化，则 sync
         if self.options.sync_writes {
@@ -127,10 +128,10 @@ impl WriteBatch<'_> {
         for (_, item) in pending_writes.iter() {
             if item.rec_type == LogRecordType::Normal {
                 let record_pos = positions.get(&item.key).unwrap();
-                self.engine.index.put(item.key.clone(), *record_pos);
+                self.engine.index.put(item.key.clone(), *record_pos)?;
             }
             if item.rec_type == LogRecordType::Deleted {
-                self.engine.index.delete(item.key.clone());
+                self.engine.index.delete(item.key.clone())?;
             }
         }
 
@@ -141,9 +142,119 @@ impl WriteBatch<'_> {
     }
 }
 
+/// 编码 seq no 和 key
 pub(crate) fn log_record_key_with_seq(key: Vec<u8>, seq_no: usize) -> Vec<u8> {
     let mut enc_key = BytesMut::new();
     encode_length_delimiter(seq_no, &mut enc_key).unwrap();
     enc_key.extend_from_slice(&key.to_vec());
     enc_key.to_vec()
+}
+
+/// 解析 LogRecord 和 key。拿到实际的 key 和 seq no
+pub(crate) fn parse_log_record_key(key: Vec<u8>) -> (Vec<u8>, usize) {
+    let mut buf = BytesMut::new();
+    buf.put_slice(&key);
+    let seq_no = decode_length_delimiter(&mut buf).unwrap();
+    (buf.to_vec(), seq_no)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{options::Options, util};
+    use std::path::PathBuf;
+    use std::sync::atomic::Ordering;
+
+    use super::*;
+
+    #[test]
+    fn test_write_batch_1() {
+        let opts = Options {
+            dir_path: PathBuf::from("/tmp/bitcask-rs-batch-1"),
+            data_file_size: 64 * 1024 * 1024,
+            ..Default::default()
+        };
+        let engine = Engine::open(opts.clone()).expect("failed to open engine");
+
+        let wb = engine
+            .new_write_batch(WriteBatchOptions::default())
+            .expect("failed to create write batch");
+        // 写数据之后未提交
+        let put_res1 = wb.put(
+            util::rand_kv::get_test_key(1),
+            util::rand_kv::get_test_value(10),
+        );
+        assert!(put_res1.is_ok());
+        let put_res2 = wb.put(
+            util::rand_kv::get_test_key(2),
+            util::rand_kv::get_test_value(10),
+        );
+        assert!(put_res2.is_ok());
+
+        let res1 = engine.get(util::rand_kv::get_test_key(1));
+        assert_eq!(Errors::KeyNotFound, res1.err().unwrap());
+
+        // 事务提交之后进行查询
+        let commit_res = wb.commit();
+        assert!(commit_res.is_ok());
+
+        let res2 = engine.get(util::rand_kv::get_test_key(1));
+        assert!(res2.is_ok());
+
+        // 验证事务序列号
+        let seq_no = wb.engine.seq_no.load(Ordering::SeqCst);
+        assert_eq!(2, seq_no);
+
+        // 删除测试的文件夹
+        std::fs::remove_dir_all(opts.clone().dir_path).expect("failed to remove path");
+    }
+
+    #[test]
+    fn test_write_batch_2() {
+        let opts = Options {
+            dir_path: PathBuf::from("/tmp/bitcask-rs-batch-2"),
+            data_file_size: 64 * 1024 * 1024,
+            ..Default::default()
+        };
+        let engine = Engine::open(opts.clone()).expect("failed to open engine");
+
+        let wb = engine
+            .new_write_batch(WriteBatchOptions::default())
+            .expect("failed to create write batch");
+        let put_res1 = wb.put(
+            util::rand_kv::get_test_key(1),
+            util::rand_kv::get_test_value(10),
+        );
+        assert!(put_res1.is_ok());
+        let put_res2 = wb.put(
+            util::rand_kv::get_test_key(2),
+            util::rand_kv::get_test_value(10),
+        );
+        assert!(put_res2.is_ok());
+        let commit_res1 = wb.commit();
+        assert!(commit_res1.is_ok());
+
+        let put_res3 = wb.put(
+            util::rand_kv::get_test_key(1),
+            util::rand_kv::get_test_value(10),
+        );
+        assert!(put_res3.is_ok());
+
+        let commit_res2 = wb.commit();
+        assert!(commit_res2.is_ok());
+
+        // 重启之后进行校验
+        engine.close().expect("failed to close");
+        std::mem::drop(engine);
+
+        let engine2 = Engine::open(opts.clone()).expect("failed to open engine");
+        let keys = engine2.list_keys();
+        assert_eq!(2, keys.ok().unwrap().len());
+
+        // 验证事务序列号
+        let seq_no = engine2.seq_no.load(Ordering::SeqCst);
+        assert_eq!(3, seq_no);
+
+        // 删除测试的文件夹
+        std::fs::remove_dir_all(opts.clone().dir_path).expect("failed to remove path");
+    }
 }

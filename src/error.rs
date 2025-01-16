@@ -60,6 +60,9 @@ pub enum Errors {
 
     #[error("exceed the max batch num")]
     ExceedMaxBatchNum,
+
+    #[error("update index error")]
+    UpdateIndexError,
 }
 
 pub type Result<T> = result::Result<T, Errors>;

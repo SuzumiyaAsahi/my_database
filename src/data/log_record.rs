@@ -47,6 +47,12 @@ pub struct ReadLogRecord {
     pub(crate) size: u64,
 }
 
+/// 暂存事务数据信息
+pub struct TransactionRecord {
+    pub(crate) record: LogRecord,
+    pub(crate) pos: LogRecordPos,
+}
+
 impl LogRecord {
     /// encode 对 LogRecord 进行编码，返回字节数组及长度
     ///

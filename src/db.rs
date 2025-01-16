@@ -1,7 +1,8 @@
 use crate::{
+    batch::{log_record_key_with_seq, parse_log_record_key, NON_TRANSCATION_SEQ_NO},
     data::{
         data_file::{DataFile, DATA_FILE_NAME_SUFFIX},
-        log_record::{LogRecord, LogRecordPos, LogRecordType},
+        log_record::{LogRecord, LogRecordPos, LogRecordType, TransactionRecord},
     },
     error::{Errors, Result},
     index,
@@ -91,11 +92,18 @@ impl Engine {
             index: Box::new(index::new_indexer(options.index_type)),
             file_ids,
             batch_commit_lock: Mutex::new(()),
-            seq_no: Arc::new(AtomicUsize::new(0)),
+            seq_no: Arc::new(AtomicUsize::new(1)),
         };
 
         // 从数据文件中加载索引
-        engine.load_index_from_data_files()?;
+        let current_seq_no = engine.load_index_from_data_files()?;
+
+        // 更新当前事务序列号
+        if current_seq_no > 0 {
+            engine
+                .seq_no
+                .store(current_seq_no + 1, std::sync::atomic::Ordering::SeqCst);
+        }
 
         Ok(engine)
     }
@@ -121,7 +129,7 @@ impl Engine {
 
         // 构造 LogRecord
         let mut record = LogRecord {
-            key: key.to_vec(),
+            key: log_record_key_with_seq(key.to_vec(), NON_TRANSCATION_SEQ_NO),
             value: value.to_vec(),
             rec_type: LogRecordType::Normal,
         };
@@ -151,7 +159,7 @@ impl Engine {
 
         // 构建 LogRecord，标志其是被删除的
         let mut record = LogRecord {
-            key: key.to_vec(),
+            key: log_record_key_with_seq(key.to_vec(), NON_TRANSCATION_SEQ_NO),
             value: Default::default(),
             rec_type: LogRecordType::Deleted,
         };
@@ -257,11 +265,15 @@ impl Engine {
 
     /// 从数据文件中加载内存索引
     /// 遍历数据文件中的内容，并依次处理其中的记录
-    fn load_index_from_data_files(&mut self) -> Result<()> {
+    fn load_index_from_data_files(&mut self) -> Result<usize> {
+        let mut current_seq_no = NON_TRANSCATION_SEQ_NO;
         // 数据文件为空，直接返回
         if self.file_ids.is_empty() {
-            return Ok(());
+            return Ok(current_seq_no);
         }
+
+        // 暂存事务相关的数据
+        let mut transaction_records = HashMap::new();
 
         let active_file = self.active_file.read();
         let older_files = self.older_files.read();
@@ -278,7 +290,7 @@ impl Engine {
                     }
                 };
 
-                let (log_record, size) = match log_record_res {
+                let (mut log_record, size) = match log_record_res {
                     Ok(result) => (result.record, result.size),
                     Err(e) => {
                         if e == Errors::ReadDataFileEOF {
@@ -295,13 +307,40 @@ impl Engine {
                     offset,
                 };
 
-                match log_record.rec_type {
-                    LogRecordType::Normal => {
-                        self.index.put(log_record.key.to_vec(), log_record_pos)?
-                    }
+                // 解析 key，拿到实际的 key 和 seq no
+                let (real_key, seq_no) = parse_log_record_key(log_record.key);
 
-                    LogRecordType::Deleted => self.index.delete(log_record.key.to_vec())?,
-                };
+                // 非事务提交的情况，直接更新内存索引
+                if seq_no == NON_TRANSCATION_SEQ_NO {
+                    self.update_index(real_key, log_record.rec_type, log_record_pos)?;
+                }
+                // 事务有提交的标识，更新内存索引
+                else if log_record.rec_type == LogRecordType::TXNFINISHED {
+                    let records: &Vec<TransactionRecord> =
+                        transaction_records.get(&seq_no).unwrap();
+                    for txn_record in records.iter() {
+                        self.update_index(
+                            txn_record.record.key.clone(),
+                            txn_record.record.rec_type,
+                            txn_record.pos,
+                        )?;
+                    }
+                    transaction_records.remove(&seq_no);
+                } else {
+                    log_record.key = real_key;
+                    transaction_records
+                        .entry(seq_no)
+                        .or_insert(Vec::new())
+                        .push(TransactionRecord {
+                            record: log_record,
+                            pos: log_record_pos,
+                        });
+                }
+
+                // 更新当前事务序列号
+                if seq_no > current_seq_no {
+                    current_seq_no = seq_no;
+                }
 
                 // 递增活跃文件的 offset
                 offset += size;
@@ -312,7 +351,17 @@ impl Engine {
                 active_file.set_write_off(offset);
             }
         }
-        Ok(())
+        Ok(current_seq_no)
+    }
+
+    fn update_index(&self, key: Vec<u8>, rec_type: LogRecordType, pos: LogRecordPos) -> Result<()> {
+        match rec_type {
+            LogRecordType::Normal => self.index.put(key, pos),
+
+            LogRecordType::Deleted => self.index.delete(key),
+
+            _ => Err(Errors::UpdateIndexError),
+        }
     }
 }
 
