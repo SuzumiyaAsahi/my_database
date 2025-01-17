@@ -6,6 +6,7 @@ use crate::{
     },
     error::{Errors, Result},
     index,
+    merge::load_merge_files,
     options::Options,
 };
 use bytes::Bytes;
@@ -56,6 +57,9 @@ impl Engine {
                 return Err(Errors::FailedCreateDatabaseDir);
             }
         }
+
+        // 加载 merge 数据目录
+        load_merge_files(dir_path.clone())?;
 
         // 加载数据文件
         let mut data_files = load_data_files(dir_path.clone())?;

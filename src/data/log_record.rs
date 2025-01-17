@@ -1,5 +1,9 @@
 use bytes::{BufMut, BytesMut};
-use prost::{encode_length_delimiter, length_delimiter_len};
+use prost::{
+    encode_length_delimiter,
+    encoding::{decode_varint, encode_varint},
+    length_delimiter_len,
+};
 
 /// LogRecord 写入到数据文件的记录
 /// 之所以叫日志，是因为数据文件中的数据是追加写入的，类似日志的格式
@@ -30,6 +34,15 @@ impl LogRecordType {
             2 => LogRecordType::TXNFINISHED,
             _ => panic!("unknown log record type"),
         }
+    }
+}
+
+impl LogRecordPos {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut buf = BytesMut::new();
+        encode_varint(self.file_id as u64, &mut buf);
+        encode_varint(self.offset, &mut buf);
+        buf.to_vec()
     }
 }
 
@@ -110,6 +123,25 @@ impl LogRecord {
 pub fn max_log_record_header_size() -> usize {
     use prost::length_delimiter_len;
     size_of::<u8>() + length_delimiter_len(u32::MAX as usize) * 2
+}
+
+/// 解码 LogRecordPos
+pub fn decode_log_record_pos(pos: Vec<u8>) -> LogRecordPos {
+    let mut buf = BytesMut::new();
+    buf.put_slice(&pos);
+
+    let fid = match decode_varint(&mut buf) {
+        Ok(fid) => fid,
+        Err(e) => panic!("decode log record pos err: {}", e),
+    };
+    let offset = match decode_varint(&mut buf) {
+        Ok(offset) => offset,
+        Err(e) => panic!("deocde log record pos err: {}", e),
+    };
+    LogRecordPos {
+        file_id: fid as u32,
+        offset,
+    }
 }
 
 #[cfg(test)]
