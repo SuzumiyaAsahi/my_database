@@ -4,7 +4,7 @@ use std::{fs, path::PathBuf};
 use crate::{
     batch::{log_record_key_with_seq, parse_log_record_key, NON_TRANSCATION_SEQ_NO},
     data::{
-        data_file::{get_data_file_name, DataFile, HINT_FILE_NAME},
+        data_file::{get_data_file_name, DataFile, HINT_FILE_NAME, MERGE_FINISHED_FILE_NAME},
         log_record::{decode_log_record_pos, LogRecord, LogRecordType},
     },
     db::Engine,
@@ -162,8 +162,9 @@ impl Engine {
             let log_record_pos = decode_log_record_pos(log_record.value);
             // 存储到内存索引中
             self.index.put(log_record.key, log_record_pos)?;
+            offset += size;
         }
-        todo!()
+        Ok(())
     }
 }
 
@@ -198,7 +199,7 @@ pub(crate) fn load_merge_files(dir_path: PathBuf) -> Result<()> {
         let file_os_str = entry.file_name();
         let file_name = file_os_str.to_str().unwrap();
 
-        if file_name.ends_with(MERGE_FIR_NAME) {
+        if file_name.ends_with(MERGE_FINISHED_FILE_NAME) {
             merge_finished = true;
         }
         merge_file_names.push(entry.file_name());
