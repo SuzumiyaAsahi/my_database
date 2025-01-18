@@ -1,4 +1,6 @@
+pub mod bptree;
 pub mod btree;
+pub mod skiplist;
 use bytes::Bytes;
 
 use crate::{
@@ -26,10 +28,10 @@ pub trait Indexer: Sync + Send {
 }
 
 /// 根据类型打开内存索引
-pub fn new_indexer(index_type: IndexType) -> impl Indexer {
+pub fn new_indexer(index_type: IndexType) -> Box<dyn Indexer> {
     match index_type {
-        IndexType::BTree => btree::BTree::new(),
-        IndexType::SkipList => todo!(),
+        IndexType::BTree => Box::new(btree::BTree::new()),
+        IndexType::SkipList => Box::new(skiplist::SkipList::new()),
     }
 }
 
