@@ -12,6 +12,7 @@ use std::{path::PathBuf, sync::Arc};
 pub const DATA_FILE_NAME_SUFFIX: &str = ".data";
 pub const HINT_FILE_NAME: &str = "hint-index";
 pub const MERGE_FINISHED_FILE_NAME: &str = "merge-finished";
+pub const SEQ_FILE_NAME: &str = "seq-no";
 
 /// 数据文件
 pub struct DataFile {
@@ -62,6 +63,22 @@ impl DataFile {
             write_off: Arc::new(RwLock::new(0)),
             io_manager: Box::new(io_manager),
         })
+    }
+
+    /// 新建或打开存储事务序列号的文件
+    pub fn new_seq_no_file(dir_path: PathBuf) -> Result<DataFile> {
+        let file_name = dir_path.join(SEQ_FILE_NAME);
+        let io_manager = new_io_manager(file_name)?;
+
+        Ok(DataFile {
+            file_id: Arc::new(RwLock::new(0)),
+            write_off: Arc::new(RwLock::new(0)),
+            io_manager: Box::new(io_manager),
+        })
+    }
+
+    pub fn file_size(&self) -> u64 {
+        self.io_manager.size()
     }
 
     pub fn get_file_off(&self) -> u64 {

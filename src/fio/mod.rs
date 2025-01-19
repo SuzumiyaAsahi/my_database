@@ -13,6 +13,9 @@ pub trait IOManager: Sync + Send {
 
     /// 持久化数据
     fn sync(&self) -> Result<()>;
+
+    /// 获取文件大小
+    fn size(&self) -> u64;
 }
 
 pub fn new_io_manager(file_name: PathBuf) -> Result<impl IOManager> {

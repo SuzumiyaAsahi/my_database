@@ -7,7 +7,8 @@ use crate::{
     data::log_record::{LogRecord, LogRecordType},
     db::Engine,
     error::{Errors, Result},
-    options::WriteBatchOptions,
+    index::bptree::BPlusTree,
+    options::{IndexType, WriteBatchOptions},
 };
 
 const TXN_FINISHED: &[u8] = "legacy".as_bytes();
@@ -23,6 +24,12 @@ pub struct WriteBatch<'a> {
 impl Engine {
     /// 初始化 WriteBatch
     pub fn new_write_batch(&self, options: WriteBatchOptions) -> Result<WriteBatch> {
+        if self.options.index_type == IndexType::BPlusTree
+            && !self.seq_file_exists
+            && !self.is_initial
+        {
+            return Err(Errors::UnableToUserWriteBatch);
+        }
         Ok(WriteBatch {
             pending_writes: Arc::new(Mutex::new(HashMap::new())),
             engine: self,

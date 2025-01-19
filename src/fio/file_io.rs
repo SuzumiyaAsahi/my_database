@@ -2,7 +2,7 @@ use crate::error::{Errors, Result};
 use log::error;
 use parking_lot::RwLock;
 use std::{
-    fs::{File, OpenOptions},
+    fs::{File, Metadata, OpenOptions},
     io::Write,
     os::unix::prelude::FileExt,
     path::PathBuf,
@@ -63,6 +63,12 @@ impl IOManager for FileIO {
             return Err(Errors::FailedSyncDataFile);
         }
         Ok(())
+    }
+
+    fn size(&self) -> u64 {
+        let read_guard = self.fd.read();
+        let metadata: Metadata = read_guard.metadata().unwrap();
+        metadata.len()
     }
 }
 
