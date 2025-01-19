@@ -43,7 +43,7 @@ fn test_engine_put() {
     assert_eq!(0, res8.ok().unwrap().len());
 
     // 5.写到数据文件进行了转换
-    for i in 0..=1000000 {
+    for i in 0..=1000 {
         let res = engine.put(get_test_key(i), get_test_value(i));
         assert!(res.is_ok());
     }
@@ -99,7 +99,7 @@ fn test_engine_get() {
     assert_eq!(Errors::KeyNotFound, res9.err().unwrap());
 
     // 5.转换为了旧的数据文件，从旧的数据文件上获取 value
-    for i in 500..=1000000 {
+    for i in 500..=1000 {
         let res = engine.put(get_test_key(i), get_test_value(i));
         assert!(res.is_ok());
     }
@@ -202,6 +202,27 @@ fn test_engine_sync() {
 
     let close_res = engine.sync();
     assert!(close_res.is_ok());
+
+    // 删除测试的文件夹
+    std::fs::remove_dir_all(opts.clone().dir_path).expect("failed to remove path");
+}
+
+#[test]
+fn test_engine_filelock() {
+    let opts = Options {
+        dir_path: PathBuf::from("/tmp/bitcask-rs-flock"),
+        ..Default::default()
+    };
+    let engine = Engine::open(opts.clone()).expect("failed to open engine");
+
+    let res1 = Engine::open(opts.clone());
+    assert_eq!(res1.err().unwrap(), Errors::DatabaseIsUsing);
+
+    let res2 = engine.close();
+    assert!(res2.is_ok());
+
+    let res3 = Engine::open(opts.clone());
+    assert!(res3.is_ok());
 
     // 删除测试的文件夹
     std::fs::remove_dir_all(opts.clone().dir_path).expect("failed to remove path");

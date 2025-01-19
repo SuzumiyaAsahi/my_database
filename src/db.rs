@@ -7,20 +7,22 @@ use crate::{
     error::{Errors, Result},
     index,
     merge::load_merge_files,
-    options::{self, IndexType, Options},
+    options::{IndexType, Options},
 };
 use bytes::Bytes;
+use fs2::FileExt;
 use log::warn;
 use parking_lot::{Mutex, RwLock};
 use std::{
     collections::HashMap,
-    fs,
+    fs::{self, File},
     path::PathBuf,
     sync::{atomic::AtomicUsize, Arc},
 };
 
 const INITIAL_FILE_ID: u32 = 0;
 const SEQ_NO_KEY: &str = "seq.no";
+pub(crate) const FILE_LOCK_NAME: &str = "flock";
 
 /// bitcask 存储引擎实例结构体
 pub struct Engine {
@@ -43,6 +45,10 @@ pub struct Engine {
     pub(crate) seq_file_exists: bool,
     /// 是否第一词初始化该目录
     pub(crate) is_initial: bool,
+    /// 文件锁，保证只能在数据目录上打开一个实例
+    lock_file: File,
+    /// 累计写入了多少字节
+    bytes_write: Arc<AtomicUsize>,
 }
 
 impl Engine {
@@ -64,6 +70,19 @@ impl Engine {
                 return Err(Errors::FailedCreateDatabaseDir);
             }
         }
+
+        // 判断数据目录是否已经被使用了
+        let lock_file = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(dir_path.join(FILE_LOCK_NAME))
+            .unwrap();
+
+        if lock_file.try_lock_exclusive().is_err() {
+            return Err(Errors::DatabaseIsUsing);
+        }
+
         let entries = fs::read_dir(dir_path.clone()).unwrap();
         if entries.count() == 0 {
             is_initial = true;
@@ -113,6 +132,8 @@ impl Engine {
             merging_lock: Mutex::new(()),
             seq_file_exists: false,
             is_initial,
+            lock_file,
+            bytes_write: Arc::new(AtomicUsize::new(0)),
         };
 
         // B+ 树不需要从数据文件中加载索引
@@ -149,6 +170,10 @@ impl Engine {
 
     /// 关闭数据库，释放相关资源
     pub fn close(&self) -> Result<()> {
+        // 如果语句目录不存在则返回
+        if !self.options.dir_path.is_dir() {
+            return Ok(());
+        }
         // 记录当前事务序列号
         let seq_no_file = DataFile::new_seq_no_file(self.options.dir_path.clone())?;
         let seq_no = self.seq_no.load(std::sync::atomic::Ordering::SeqCst);
@@ -161,7 +186,12 @@ impl Engine {
         seq_no_file.sync()?;
 
         let read_guard = self.active_file.read();
-        read_guard.sync()
+        read_guard.sync()?;
+
+        // 释放文件锁
+        self.lock_file.unlock().unwrap();
+
+        Ok(())
     }
 
     /// 持久化当前活跃文件
@@ -302,6 +332,7 @@ impl Engine {
         active_file.write(&enc_record)?;
 
         // 根据配置项决定是否持久化
+
         if self.options.sync_writes {
             active_file.sync()?;
         }

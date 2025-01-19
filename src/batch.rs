@@ -7,7 +7,6 @@ use crate::{
     data::log_record::{LogRecord, LogRecordType},
     db::Engine,
     error::{Errors, Result},
-    index::bptree::BPlusTree,
     options::{IndexType, WriteBatchOptions},
 };
 

@@ -13,6 +13,9 @@ pub struct Options {
 
     /// 索引类型
     pub index_type: IndexType,
+
+    /// 累计写到多少字节好进行持久化
+    pub bytes_per_sync: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -33,7 +36,8 @@ impl Default for Options {
             dir_path: std::env::temp_dir().join("bitcask-rs"),
             data_file_size: 256 * 1024 * 1024, // 256MB
             sync_writes: false,
-            index_type: IndexType::BPlusTree,
+            index_type: IndexType::BTree,
+            bytes_per_sync: 0,
         }
     }
 }

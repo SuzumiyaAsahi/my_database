@@ -9,7 +9,7 @@ use crate::{
         },
         log_record::{decode_log_record_pos, LogRecord, LogRecordType},
     },
-    db::Engine,
+    db::{Engine, FILE_LOCK_NAME},
     error::{Errors, Result},
     options::Options,
 };
@@ -206,6 +206,10 @@ pub(crate) fn load_merge_files(dir_path: PathBuf) -> Result<()> {
         }
 
         if file_name.ends_with(SEQ_FILE_NAME) {
+            continue;
+        }
+
+        if file_name.ends_with(FILE_LOCK_NAME) {
             continue;
         }
         merge_file_names.push(entry.file_name());
