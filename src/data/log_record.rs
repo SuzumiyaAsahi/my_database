@@ -23,7 +23,7 @@ pub enum LogRecordType {
     Deleted = 1,
 
     /// 事务完成的标识
-    TXNFINISHED = 2,
+    Txnfinished = 2,
 }
 
 impl LogRecordType {
@@ -31,7 +31,7 @@ impl LogRecordType {
         match v {
             0 => LogRecordType::Normal,
             1 => LogRecordType::Deleted,
-            2 => LogRecordType::TXNFINISHED,
+            2 => LogRecordType::Txnfinished,
             _ => panic!("unknown log record type"),
         }
     }

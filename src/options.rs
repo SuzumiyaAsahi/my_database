@@ -16,6 +16,9 @@ pub struct Options {
 
     /// 累计写到多少字节好进行持久化
     pub bytes_per_sync: usize,
+
+    /// 是否用 mmap 打开数据库
+    pub mmap_at_startup: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -38,6 +41,7 @@ impl Default for Options {
             sync_writes: false,
             index_type: IndexType::BTree,
             bytes_per_sync: 0,
+            mmap_at_startup: true,
         }
     }
 }
@@ -64,4 +68,13 @@ impl Default for WriteBatchOptions {
             sync_writes: true,
         }
     }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum IOType {
+    // 标准文件 IO
+    StandardFIO,
+
+    // 内存文件映射
+    MemoryMap,
 }

@@ -1,3 +1,4 @@
+#![feature(file_lock)]
 mod batch;
 mod data;
 pub mod db;

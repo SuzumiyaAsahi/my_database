@@ -115,11 +115,19 @@ impl Engine {
         // sync 数据文件保证持久性
         active_file.sync()?;
         let active_file_id = active_file.get_file_id();
-        let new_active_file = DataFile::new(self.options.dir_path.clone(), active_file_id + 1)?;
+        let new_active_file = DataFile::new(
+            self.options.dir_path.clone(),
+            active_file_id + 1,
+            crate::options::IOType::MemoryMap,
+        )?;
         *active_file = new_active_file;
 
         // 加到旧的数据文件当中
-        let old_file = DataFile::new(self.options.dir_path.clone(), active_file_id)?;
+        let old_file = DataFile::new(
+            self.options.dir_path.clone(),
+            active_file_id,
+            crate::options::IOType::MemoryMap,
+        )?;
         older_files.insert(active_file_id, old_file);
 
         // 加载到 merge 的文件 id 列表中
@@ -131,7 +139,11 @@ impl Engine {
         // 打开所有需要 merge 取出旧的数据文件
         let mut merge_files = Vec::new();
         for file_id in merge_file_ids.iter() {
-            let data_file = DataFile::new(self.options.dir_path.clone(), *file_id)?;
+            let data_file = DataFile::new(
+                self.options.dir_path.clone(),
+                *file_id,
+                crate::options::IOType::MemoryMap,
+            )?;
             merge_files.push(data_file);
         }
 

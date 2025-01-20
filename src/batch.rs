@@ -120,7 +120,7 @@ impl WriteBatch<'_> {
         let mut finish_record = LogRecord {
             key: log_record_key_with_seq(TXN_FINISHED.to_vec(), seq_no),
             value: Default::default(),
-            rec_type: LogRecordType::TXNFINISHED,
+            rec_type: LogRecordType::Txnfinished,
         };
 
         self.engine.append_log_record(&mut finish_record)?;

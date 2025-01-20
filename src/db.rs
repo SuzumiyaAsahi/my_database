@@ -7,7 +7,7 @@ use crate::{
     error::{Errors, Result},
     index,
     merge::load_merge_files,
-    options::{IndexType, Options},
+    options::{IOType, IndexType, Options},
 };
 use bytes::Bytes;
 use fs2::FileExt;
@@ -76,6 +76,7 @@ impl Engine {
             .read(true)
             .write(true)
             .create(true)
+            .truncate(false)
             .open(dir_path.join(FILE_LOCK_NAME))
             .unwrap();
 
@@ -92,7 +93,7 @@ impl Engine {
         load_merge_files(dir_path.clone())?;
 
         // 加载数据文件
-        let mut data_files = load_data_files(dir_path.clone())?;
+        let mut data_files = load_data_files(dir_path.clone(), options.mmap_at_startup)?;
 
         // 设置 file id 信息
         let mut file_ids = Vec::new();
@@ -118,7 +119,11 @@ impl Engine {
         // 拿到当前活跃文件，即列表中最后一个文件
         let active_file = match data_files.pop() {
             Some(v) => v,
-            None => DataFile::new(dir_path.clone(), INITIAL_FILE_ID)?,
+            None => DataFile::new(
+                dir_path.clone(),
+                INITIAL_FILE_ID,
+                crate::options::IOType::StandardFIO,
+            )?,
         };
 
         let mut engine = Self {
@@ -149,6 +154,11 @@ impl Engine {
                 engine
                     .seq_no
                     .store(current_seq_no + 1, std::sync::atomic::Ordering::SeqCst);
+            }
+
+            // 重置 IO 类型
+            if engine.options.mmap_at_startup {
+                engine.reset_io_type()?;
             }
         } else {
             // 加载事务序列号
@@ -319,11 +329,19 @@ impl Engine {
 
             // 旧的数据文件存储到 map 中
             let mut older_files = self.older_files.write();
-            let old_file = DataFile::new(dir_path.clone(), current_fid)?;
+            let old_file = DataFile::new(
+                dir_path.clone(),
+                current_fid,
+                crate::options::IOType::MemoryMap,
+            )?;
             older_files.insert(current_fid, old_file);
 
             // 打开新的数据文件
-            let new_file = DataFile::new(dir_path.clone(), current_fid + 1)?;
+            let new_file = DataFile::new(
+                dir_path.clone(),
+                current_fid + 1,
+                crate::options::IOType::MemoryMap,
+            )?;
             *active_file = new_file;
         }
 
@@ -331,10 +349,23 @@ impl Engine {
         let write_off = active_file.get_file_off();
         active_file.write(&enc_record)?;
 
+        let previous = self
+            .bytes_write
+            .fetch_add(enc_record.len(), std::sync::atomic::Ordering::SeqCst);
         // 根据配置项决定是否持久化
+        let mut need_sync = self.options.sync_writes;
+        if !need_sync
+            && self.options.bytes_per_sync > 0
+            && previous + enc_record.len() >= self.options.bytes_per_sync
+        {
+            need_sync = true;
+        }
 
-        if self.options.sync_writes {
+        if need_sync {
             active_file.sync()?;
+            // 清空累计值
+            self.bytes_write
+                .store(0, std::sync::atomic::Ordering::SeqCst);
         }
 
         // 构造数据索引信息
@@ -413,7 +444,7 @@ impl Engine {
                     self.update_index(real_key, log_record.rec_type, log_record_pos)?;
                 }
                 // 事务有提交的标识，更新内存索引
-                else if log_record.rec_type == LogRecordType::TXNFINISHED {
+                else if log_record.rec_type == LogRecordType::Txnfinished {
                     let records: &Vec<TransactionRecord> =
                         transaction_records.get(&seq_no).unwrap();
                     for txn_record in records.iter() {
@@ -483,6 +514,16 @@ impl Engine {
 
         (true, seq_no)
     }
+
+    fn reset_io_type(&self) -> Result<()> {
+        let mut active_file = self.active_file.write();
+        active_file.set_io_iomanager(self.options.dir_path.clone(), IOType::StandardFIO)?;
+        let mut older_files = self.older_files.write();
+        for (_, file) in older_files.iter_mut() {
+            file.set_io_iomanager(self.options.dir_path.clone(), IOType::StandardFIO)?;
+        }
+        Ok(())
+    }
 }
 
 impl Drop for Engine {
@@ -494,7 +535,7 @@ impl Drop for Engine {
 }
 
 /// 从数据目录中加载数据文件
-fn load_data_files(dir_path: PathBuf) -> Result<Vec<DataFile>> {
+fn load_data_files(dir_path: PathBuf, use_mmap: bool) -> Result<Vec<DataFile>> {
     // 读取数据目录
     let dir = fs::read_dir(dir_path.clone());
 
@@ -534,7 +575,11 @@ fn load_data_files(dir_path: PathBuf) -> Result<Vec<DataFile>> {
 
         // 遍历所有文件 id，依次打开对应的数据文件
         for file_id in file_ids {
-            let data_file = DataFile::new(dir_path.clone(), file_id)?;
+            let mut io_type = IOType::StandardFIO;
+            if use_mmap {
+                io_type = IOType::MemoryMap;
+            }
+            let data_file = DataFile::new(dir_path.clone(), file_id, io_type)?;
             data_files.push(data_file);
         }
 

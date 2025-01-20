@@ -1,8 +1,5 @@
 use super::Indexer;
-use crate::data::log_record::LogRecordPos;
-use crate::error::Errors;
-use crate::error::Result;
-use crate::index::IteratorOptions;
+use crate::{data::log_record::LogRecordPos, error::Result, index::IteratorOptions};
 use bytes::Bytes;
 use crossbeam_skiplist::SkipMap;
 use std::sync::Arc;
