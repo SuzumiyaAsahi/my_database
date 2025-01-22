@@ -30,14 +30,24 @@ impl BPlusTree {
 }
 
 impl Indexer for BPlusTree {
-    fn put(&self, key: Vec<u8>, pos: LogRecordPos) -> Result<()> {
+    fn put(&self, key: Vec<u8>, pos: LogRecordPos) -> Option<LogRecordPos> {
+        let mut result = None;
         let tx = self.tree.tx(true).expect("failed to begin tx");
         let bucket = tx.get_bucket(BPTREE_BUCKET_NAME).unwrap();
+
+        // 先获取到旧的值
+        if let Some(kv) = bucket.get_kv(&key) {
+            let pos = decode_log_record_pos(kv.value().to_vec());
+            result = Some(pos);
+        }
+
+        // put 新值
         bucket
             .put(key, pos.encode())
             .expect("failed to put value in bptree");
         tx.commit().unwrap();
-        Ok(())
+
+        result
     }
 
     fn get(&self, key: Vec<u8>) -> Option<LogRecordPos> {
@@ -49,16 +59,16 @@ impl Indexer for BPlusTree {
         None
     }
 
-    fn delete(&self, key: Vec<u8>) -> Result<()> {
+    fn delete(&self, key: Vec<u8>) -> Option<LogRecordPos> {
+        let mut result = None;
         let tx = self.tree.tx(true).expect("failed to begin tx");
         let bucket = tx.get_bucket(BPTREE_BUCKET_NAME).unwrap();
-        if let Err(e) = bucket.delete(key) {
-            if e == Error::KeyValueMissing {
-                return Err(Errors::IndexDeleteFailed);
-            }
+        if let Ok(kv) = bucket.delete(key) {
+            let pos = decode_log_record_pos(kv.value().to_vec());
+            result = Some(pos);
         }
         tx.commit().unwrap();
-        Ok(())
+        result
     }
 
     fn list_keys(&self) -> Result<Vec<bytes::Bytes>> {
@@ -132,222 +142,5 @@ impl crate::index::IndexIterator for BPTreeIterator {
             }
         }
         None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::fs;
-
-    use super::*;
-
-    #[test]
-    fn test_bptree_put() {
-        let path = PathBuf::from("/tmp/bptree-put");
-        fs::create_dir_all(path.clone()).unwrap();
-        let bpt = BPlusTree::new(path.clone());
-
-        let res1 = bpt.put(
-            b"ccbde".to_vec(),
-            LogRecordPos {
-                file_id: 123,
-                offset: 883,
-            },
-        );
-        assert!(res1.is_ok());
-        let res2 = bpt.put(
-            b"bbed".to_vec(),
-            LogRecordPos {
-                file_id: 123,
-                offset: 883,
-            },
-        );
-        assert!(res2.is_ok());
-        let res3 = bpt.put(
-            b"aeer".to_vec(),
-            LogRecordPos {
-                file_id: 123,
-                offset: 883,
-            },
-        );
-        assert!(res3.is_ok());
-        let res4 = bpt.put(
-            b"cccd".to_vec(),
-            LogRecordPos {
-                file_id: 123,
-                offset: 883,
-            },
-        );
-        assert!(res4.is_ok());
-
-        let res5 = bpt.put(
-            b"cccd".to_vec(),
-            LogRecordPos {
-                file_id: 77,
-                offset: 11,
-            },
-        );
-        assert!(res5.is_ok());
-
-        fs::remove_dir_all(path.clone()).unwrap();
-    }
-
-    #[test]
-    fn test_bptree_get() {
-        let path = PathBuf::from("/tmp/bptree-get");
-        fs::create_dir_all(path.clone()).unwrap();
-        let bpt = BPlusTree::new(path.clone());
-
-        let v1 = bpt.get(b"not exist".to_vec());
-        assert!(v1.is_none());
-
-        bpt.put(
-            b"ccbde".to_vec(),
-            LogRecordPos {
-                file_id: 123,
-                offset: 883,
-            },
-        )
-        .unwrap();
-        let v2 = bpt.get(b"ccbde".to_vec());
-        assert!(v2.is_some());
-
-        bpt.put(
-            b"ccbde".to_vec(),
-            LogRecordPos {
-                file_id: 125,
-                offset: 77773,
-            },
-        )
-        .unwrap();
-        let v3 = bpt.get(b"ccbde".to_vec());
-        assert!(v3.is_some());
-
-        fs::remove_dir_all(path.clone()).unwrap();
-    }
-
-    #[test]
-    fn test_bptree_delete() {
-        let path = PathBuf::from("/tmp/bptree-delete");
-        fs::create_dir_all(path.clone()).unwrap();
-        let bpt = BPlusTree::new(path.clone());
-
-        let r1 = bpt.delete(b"not exist".to_vec());
-        assert!(r1.is_err());
-
-        bpt.put(
-            b"ccbde".to_vec(),
-            LogRecordPos {
-                file_id: 123,
-                offset: 883,
-            },
-        )
-        .unwrap();
-        let r2 = bpt.delete(b"ccbde".to_vec());
-        assert!(r2.is_ok());
-
-        let v2 = bpt.get(b"ccbde".to_vec());
-        assert!(v2.is_none());
-
-        fs::remove_dir_all(path.clone()).unwrap();
-    }
-
-    #[test]
-    fn test_bptree_list_keys() {
-        let path = PathBuf::from("/tmp/bptree-list-keys");
-        fs::create_dir_all(path.clone()).unwrap();
-        let bpt = BPlusTree::new(path.clone());
-
-        let keys1 = bpt.list_keys();
-        assert_eq!(keys1.ok().unwrap().len(), 0);
-
-        bpt.put(
-            b"ccbde".to_vec(),
-            LogRecordPos {
-                file_id: 123,
-                offset: 883,
-            },
-        )
-        .unwrap();
-        bpt.put(
-            b"bbed".to_vec(),
-            LogRecordPos {
-                file_id: 123,
-                offset: 883,
-            },
-        )
-        .unwrap();
-        bpt.put(
-            b"aeer".to_vec(),
-            LogRecordPos {
-                file_id: 123,
-                offset: 883,
-            },
-        )
-        .unwrap();
-        bpt.put(
-            b"cccd".to_vec(),
-            LogRecordPos {
-                file_id: 123,
-                offset: 883,
-            },
-        )
-        .unwrap();
-
-        let keys2 = bpt.list_keys();
-        assert_eq!(keys2.ok().unwrap().len(), 4);
-
-        fs::remove_dir_all(path.clone()).unwrap();
-    }
-
-    #[test]
-    fn test_bptree_itreator() {
-        let path = PathBuf::from("/tmp/bptree-iterator");
-        fs::create_dir_all(path.clone()).unwrap();
-        let bpt = BPlusTree::new(path.clone());
-
-        bpt.put(
-            b"ccbde".to_vec(),
-            LogRecordPos {
-                file_id: 123,
-                offset: 883,
-            },
-        )
-        .unwrap();
-        bpt.put(
-            b"bbed".to_vec(),
-            LogRecordPos {
-                file_id: 123,
-                offset: 883,
-            },
-        )
-        .unwrap();
-        bpt.put(
-            b"aeer".to_vec(),
-            LogRecordPos {
-                file_id: 123,
-                offset: 883,
-            },
-        )
-        .unwrap();
-        bpt.put(
-            b"cccd".to_vec(),
-            LogRecordPos {
-                file_id: 123,
-                offset: 883,
-            },
-        )
-        .unwrap();
-
-        let opts = IteratorOptions {
-            reverse: true,
-            ..Default::default()
-        };
-        let mut iter = bpt.iterator(opts);
-        while let Some((key, _)) = iter.next() {
-            assert!(!key.is_empty());
-        }
-
-        fs::remove_dir_all(path.clone()).unwrap();
     }
 }

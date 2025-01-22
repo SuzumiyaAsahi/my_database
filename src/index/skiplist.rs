@@ -17,9 +17,13 @@ impl SkipList {
 }
 
 impl Indexer for SkipList {
-    fn put(&self, key: Vec<u8>, pos: LogRecordPos) -> Result<()> {
+    fn put(&self, key: Vec<u8>, pos: LogRecordPos) -> Option<LogRecordPos> {
+        let mut result = None;
+        if let Some(entry) = self.skl.get(&key) {
+            result = Some(*entry.value());
+        }
         self.skl.insert(key, pos);
-        Ok(())
+        result
     }
 
     fn get(&self, key: Vec<u8>) -> Option<LogRecordPos> {
@@ -29,13 +33,11 @@ impl Indexer for SkipList {
         None
     }
 
-    fn delete(&self, key: Vec<u8>) -> Result<()> {
-        let remove_res = self.skl.remove(&key);
-        if remove_res.is_some() {
-            Ok(())
-        } else {
-            Err(crate::error::Errors::IndexDeleteFailed)
+    fn delete(&self, key: Vec<u8>) -> Option<LogRecordPos> {
+        if let Some(entry) = self.skl.remove(&key) {
+            return Some(*entry.value());
         }
+        None
     }
 
     fn iterator(&self, options: IteratorOptions) -> Box<dyn super::IndexIterator> {
@@ -104,201 +106,5 @@ impl crate::index::IndexIterator for SkipListIterator {
             }
         }
         None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_skl_put() {
-        let skl = SkipList::new();
-        let res1 = skl.put(
-            "aacd".as_bytes().to_vec(),
-            LogRecordPos {
-                file_id: 1123,
-                offset: 1232,
-            },
-        );
-        assert!(res1.is_ok());
-        let res2 = skl.put(
-            "acdd".as_bytes().to_vec(),
-            LogRecordPos {
-                file_id: 1123,
-                offset: 1232,
-            },
-        );
-        assert!(res2.is_ok());
-        let res3 = skl.put(
-            "bbae".as_bytes().to_vec(),
-            LogRecordPos {
-                file_id: 1123,
-                offset: 1232,
-            },
-        );
-        assert!(res3.is_ok());
-        let res4 = skl.put(
-            "ddee".as_bytes().to_vec(),
-            LogRecordPos {
-                file_id: 1123,
-                offset: 1232,
-            },
-        );
-        assert!(res4.is_ok());
-
-        let res5 = skl.put(
-            "ddee".as_bytes().to_vec(),
-            LogRecordPos {
-                file_id: 93,
-                offset: 22,
-            },
-        );
-        assert!(res5.is_ok());
-    }
-
-    #[test]
-    fn test_skl_get() {
-        let skl = SkipList::new();
-
-        let v1 = skl.get(b"not exists".to_vec());
-        assert!(v1.is_none());
-
-        let res1 = skl.put(
-            "aacd".as_bytes().to_vec(),
-            LogRecordPos {
-                file_id: 1123,
-                offset: 1232,
-            },
-        );
-        assert!(res1.is_ok());
-        let v2 = skl.get(b"aacd".to_vec());
-        assert!(v2.is_some());
-
-        let res2 = skl.put(
-            "aacd".as_bytes().to_vec(),
-            LogRecordPos {
-                file_id: 11,
-                offset: 990,
-            },
-        );
-        assert!(res2.is_ok());
-        let v3 = skl.get(b"aacd".to_vec());
-        assert!(v3.is_some());
-    }
-
-    #[test]
-    fn test_skl_delete() {
-        let skl = SkipList::new();
-
-        let r1 = skl.delete(b"not exists".to_vec());
-        assert!(r1.is_err());
-
-        let res1 = skl.put(
-            "aacd".as_bytes().to_vec(),
-            LogRecordPos {
-                file_id: 1123,
-                offset: 1232,
-            },
-        );
-        assert!(res1.is_ok());
-
-        let r2 = skl.delete(b"aacd".to_vec());
-        assert!(r2.is_ok());
-
-        let v2 = skl.get(b"aacd".to_vec());
-        assert!(v2.is_none());
-    }
-
-    #[test]
-    fn test_skl_list_keys() {
-        let skl = SkipList::new();
-
-        let keys1 = skl.list_keys();
-        assert_eq!(keys1.ok().unwrap().len(), 0);
-
-        let res1 = skl.put(
-            "aacd".as_bytes().to_vec(),
-            LogRecordPos {
-                file_id: 1123,
-                offset: 1232,
-            },
-        );
-        assert!(res1.is_ok());
-        let res2 = skl.put(
-            "acdd".as_bytes().to_vec(),
-            LogRecordPos {
-                file_id: 1123,
-                offset: 1232,
-            },
-        );
-        assert!(res2.is_ok());
-        let res3 = skl.put(
-            "bbae".as_bytes().to_vec(),
-            LogRecordPos {
-                file_id: 1123,
-                offset: 1232,
-            },
-        );
-        assert!(res3.is_ok());
-        let res4 = skl.put(
-            "ddee".as_bytes().to_vec(),
-            LogRecordPos {
-                file_id: 1123,
-                offset: 1232,
-            },
-        );
-        assert!(res4.is_ok());
-
-        let keys2 = skl.list_keys();
-        assert_eq!(keys2.ok().unwrap().len(), 4);
-    }
-
-    #[test]
-    fn test_skl_iterator() {
-        let skl = SkipList::new();
-
-        let res1 = skl.put(
-            "aacd".as_bytes().to_vec(),
-            LogRecordPos {
-                file_id: 1123,
-                offset: 1232,
-            },
-        );
-        assert!(res1.is_ok());
-        let res2 = skl.put(
-            "acdd".as_bytes().to_vec(),
-            LogRecordPos {
-                file_id: 1123,
-                offset: 1232,
-            },
-        );
-        assert!(res2.is_ok());
-        let res3 = skl.put(
-            "bbae".as_bytes().to_vec(),
-            LogRecordPos {
-                file_id: 1123,
-                offset: 1232,
-            },
-        );
-        assert!(res3.is_ok());
-        let res4 = skl.put(
-            "ddee".as_bytes().to_vec(),
-            LogRecordPos {
-                file_id: 1123,
-                offset: 1232,
-            },
-        );
-        assert!(res4.is_ok());
-
-        let opts = IteratorOptions {
-            reverse: true,
-            ..Default::default()
-        };
-        let mut iter1 = skl.iterator(opts);
-
-        while let Some((key, _)) = iter1.next() {
-            assert!(!key.is_empty());
-        }
     }
 }

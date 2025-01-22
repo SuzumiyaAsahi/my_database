@@ -42,6 +42,7 @@ impl LogRecordPos {
         let mut buf = BytesMut::new();
         encode_varint(self.file_id as u64, &mut buf);
         encode_varint(self.offset, &mut buf);
+        encode_varint(self.size as u64, &mut buf);
         buf.to_vec()
     }
 }
@@ -49,8 +50,12 @@ impl LogRecordPos {
 /// 数据位置索引信息， 描述数据存储到了哪个位置
 #[derive(Debug, Clone, Copy)]
 pub struct LogRecordPos {
+    /// 文件 id，表示将数据存储到了那个文件当中
     pub(crate) file_id: u32,
+    /// 偏移，表示将数据存储到了数据文件中的那个位置
     pub(crate) offset: u64,
+    /// 数据在磁盘上的占据的空间大小
+    pub(crate) size: u32,
 }
 
 /// 从数据文件中读取的 log_record 信息，包含其 size
@@ -138,9 +143,14 @@ pub fn decode_log_record_pos(pos: Vec<u8>) -> LogRecordPos {
         Ok(offset) => offset,
         Err(e) => panic!("deocde log record pos err: {}", e),
     };
+    let size = match decode_varint(&mut buf) {
+        Ok(size) => size,
+        Err(e) => panic!("deocde log record pos err: {}", e),
+    };
     LogRecordPos {
         file_id: fid as u32,
         offset,
+        size: size as u32,
     }
 }
 

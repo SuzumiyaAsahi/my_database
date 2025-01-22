@@ -134,13 +134,20 @@ impl WriteBatch<'_> {
         for (_, item) in pending_writes.iter() {
             if item.rec_type == LogRecordType::Normal {
                 let record_pos = positions.get(&item.key).unwrap();
-                self.engine.index.put(item.key.clone(), *record_pos)?;
+                if let Some(old_pos) = self.engine.index.put(item.key.clone(), *record_pos) {
+                    self.engine
+                        .reclaim_size
+                        .fetch_add(old_pos.size as usize, std::sync::atomic::Ordering::SeqCst);
+                }
             }
             if item.rec_type == LogRecordType::Deleted {
-                self.engine.index.delete(item.key.clone())?;
+                if let Some(old_pos) = self.engine.index.delete(item.key.clone()) {
+                    self.engine
+                        .reclaim_size
+                        .fetch_add(old_pos.size as usize, std::sync::atomic::Ordering::SeqCst);
+                }
             }
         }
-
         // 清空暂存数据
         pending_writes.clear();
 

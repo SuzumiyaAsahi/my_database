@@ -82,7 +82,7 @@ impl DataFile {
         self.io_manager.size()
     }
 
-    pub fn get_file_off(&self) -> u64 {
+    pub fn get_write_off(&self) -> u64 {
         let read_guard = self.write_off.read();
         *read_guard
     }
@@ -161,7 +161,7 @@ impl DataFile {
         };
         let enc_record = hint_record.encode();
         self.write(&enc_record)?;
-        todo!()
+        Ok(())
     }
 
     pub fn sync(&self) -> Result<()> {

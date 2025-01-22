@@ -24,6 +24,19 @@ const INITIAL_FILE_ID: u32 = 0;
 const SEQ_NO_KEY: &str = "seq.no";
 pub(crate) const FILE_LOCK_NAME: &str = "flock";
 
+/// 存储引擎相关统计信息
+#[derive(Debug)]
+pub struct Stat {
+    /// key 的总数量
+    pub key_num: usize,
+    /// 数据文件的数量
+    pub data_file_num: usize,
+    /// 可以回收的数据量
+    pub reclaim_size: usize,
+    /// 数据目录占据的磁盘空间大小
+    pub disk_size: u64,
+}
+
 /// bitcask 存储引擎实例结构体
 pub struct Engine {
     pub(crate) options: Arc<Options>,
@@ -49,6 +62,8 @@ pub struct Engine {
     lock_file: File,
     /// 累计写入了多少字节
     bytes_write: Arc<AtomicUsize>,
+    /// 累计有多少空间可以 merge
+    pub(crate) reclaim_size: Arc<AtomicUsize>,
 }
 
 impl Engine {
@@ -139,6 +154,7 @@ impl Engine {
             is_initial,
             lock_file,
             bytes_write: Arc::new(AtomicUsize::new(0)),
+            reclaim_size: Arc::new(AtomicUsize::new(0)),
         };
 
         // B+ 树不需要从数据文件中加载索引
@@ -210,6 +226,18 @@ impl Engine {
         read_guard.sync()
     }
 
+    /// 获取数据库统计信息
+    pub fn stat(&self) -> Result<Stat> {
+        let keys = self.list_keys()?;
+        let older_files = self.older_files.read();
+        Ok(Stat {
+            key_num: keys.len(),
+            data_file_num: older_files.len() + 1,
+            reclaim_size: self.reclaim_size.load(std::sync::atomic::Ordering::SeqCst),
+            disk_size: crate::util::file::dir_disk_size(self.options.dir_path.clone()),
+        })
+    }
+
     /// 存储 key/value 数据，key 不能为空
     pub fn put(&self, key: Bytes, value: Bytes) -> Result<()> {
         // 判断 key 的有效性
@@ -228,7 +256,10 @@ impl Engine {
         let log_record_pos = self.append_log_record(&mut record)?;
 
         // 更新内存索引
-        self.index.put(key.to_vec(), log_record_pos)?;
+        if let Some(old_pos) = self.index.put(key.to_vec(), log_record_pos) {
+            self.reclaim_size
+                .fetch_add(old_pos.size as usize, std::sync::atomic::Ordering::SeqCst);
+        }
 
         Ok(())
     }
@@ -255,10 +286,15 @@ impl Engine {
         };
 
         // 写入到数据文件当中
-        self.append_log_record(&mut record)?;
+        let pos = self.append_log_record(&mut record)?;
+        self.reclaim_size
+            .fetch_add(pos.size as usize, std::sync::atomic::Ordering::SeqCst);
 
         // 删除内存索引中对应的 key
-        self.index.delete(key.to_vec())?;
+        if let Some(old_pos) = self.index.delete(key.to_vec()) {
+            self.reclaim_size
+                .fetch_add(old_pos.size as usize, std::sync::atomic::Ordering::SeqCst);
+        }
 
         Ok(())
     }
@@ -321,7 +357,7 @@ impl Engine {
         let mut active_file = self.active_file.write();
 
         // 判断当前活跃文件是否达到了阈值
-        if active_file.get_file_off() + record_len > self.options.data_file_size {
+        if active_file.get_write_off() + record_len > self.options.data_file_size {
             // 将当前活跃文件进行持久化
             active_file.sync()?;
 
@@ -332,7 +368,7 @@ impl Engine {
             let old_file = DataFile::new(
                 dir_path.clone(),
                 current_fid,
-                crate::options::IOType::MemoryMap,
+                crate::options::IOType::StandardFIO,
             )?;
             older_files.insert(current_fid, old_file);
 
@@ -340,13 +376,13 @@ impl Engine {
             let new_file = DataFile::new(
                 dir_path.clone(),
                 current_fid + 1,
-                crate::options::IOType::MemoryMap,
+                crate::options::IOType::StandardFIO,
             )?;
             *active_file = new_file;
         }
 
         // 追加写数据到当前活跃文件中
-        let write_off = active_file.get_file_off();
+        let write_off = active_file.get_write_off();
         active_file.write(&enc_record)?;
 
         let previous = self
@@ -372,6 +408,7 @@ impl Engine {
         Ok(LogRecordPos {
             file_id: active_file.get_file_id(),
             offset: write_off,
+            size: enc_record.len() as u32,
         })
     }
 
@@ -434,6 +471,7 @@ impl Engine {
                 let log_record_pos = LogRecordPos {
                     file_id: *file_id,
                     offset,
+                    size: size as u32,
                 };
 
                 // 解析 key，拿到实际的 key 和 seq no
@@ -441,7 +479,7 @@ impl Engine {
 
                 // 非事务提交的情况，直接更新内存索引
                 if seq_no == NON_TRANSCATION_SEQ_NO {
-                    self.update_index(real_key, log_record.rec_type, log_record_pos)?;
+                    self.update_index(real_key, log_record.rec_type, log_record_pos);
                 }
                 // 事务有提交的标识，更新内存索引
                 else if log_record.rec_type == LogRecordType::Txnfinished {
@@ -452,7 +490,7 @@ impl Engine {
                             txn_record.record.key.clone(),
                             txn_record.record.rec_type,
                             txn_record.pos,
-                        )?;
+                        );
                     }
                     transaction_records.remove(&seq_no);
                 } else {
@@ -484,13 +522,20 @@ impl Engine {
     }
 
     /// 加载索引时更新数据
-    fn update_index(&self, key: Vec<u8>, rec_type: LogRecordType, pos: LogRecordPos) -> Result<()> {
-        match rec_type {
-            LogRecordType::Normal => self.index.put(key, pos),
-
-            LogRecordType::Deleted => self.index.delete(key),
-
-            _ => Err(Errors::UpdateIndexError),
+    fn update_index(&self, key: Vec<u8>, rec_type: LogRecordType, pos: LogRecordPos) {
+        if rec_type == LogRecordType::Normal {
+            if let Some(old_pos) = self.index.put(key.clone(), pos) {
+                self.reclaim_size
+                    .fetch_add(old_pos.size as usize, std::sync::atomic::Ordering::SeqCst);
+            }
+        }
+        if rec_type == LogRecordType::Deleted {
+            let mut size = pos.size;
+            if let Some(old_pos) = self.index.delete(key) {
+                size += old_pos.size;
+            }
+            self.reclaim_size
+                .fetch_add(size as usize, std::sync::atomic::Ordering::SeqCst);
         }
     }
 
@@ -603,6 +648,10 @@ fn check_options(opts: &Options) -> Result<()> {
 
     if opts.data_file_size == 0 {
         return Err(Errors::DataFileSizeTooSmall);
+    }
+
+    if opts.data_file_merge_ratio < 0 as f32 || opts.data_file_merge_ratio > 1.0 {
+        return Err(Errors::InvalidMergeRatio);
     }
 
     Ok(())

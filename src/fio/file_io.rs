@@ -28,7 +28,7 @@ impl FileIO {
                 fd: Arc::new(RwLock::new(file)),
             }),
             Err(e) => {
-                error!("failed to open data file {}", e);
+                error!("failed to open data file in FileIO new{}", e);
                 Err(Errors::FailedOpenDataFile)
             }
         }

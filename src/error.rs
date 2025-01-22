@@ -1,7 +1,7 @@
 use std::result;
 use thiserror::Error;
 
-#[derive(Error, Debug, PartialEq)]
+#[derive(Clone, Error, Debug, PartialEq)]
 pub enum Errors {
     #[error("failed to read from data file")]
     FailedReadFromDataFile,
@@ -72,6 +72,15 @@ pub enum Errors {
 
     #[error("the database directory is used by another process")]
     DatabaseIsUsing,
+
+    #[error("invalid merge ratio, must between 0 and 1")]
+    InvalidMergeRatio,
+
+    #[error("do not reach the merge ratio")]
+    MergeRatioUnreached,
+
+    #[error("disk space is not enough for merge")]
+    MeregeNoEnoughSpace,
 }
 
 pub type Result<T> = result::Result<T, Errors>;

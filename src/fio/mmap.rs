@@ -12,7 +12,12 @@ pub struct MMapIO {
 
 impl MMapIO {
     pub fn new(file_name: PathBuf) -> Result<Self> {
-        match OpenOptions::new().create(true).read(true).open(file_name) {
+        match OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .open(file_name)
+        {
             Ok(file) => {
                 let map = unsafe { Mmap::map(&file).expect("faile to map the file") };
                 Ok(Self {
@@ -20,7 +25,7 @@ impl MMapIO {
                 })
             }
             Err(e) => {
-                error!("failed to open data file {}", e);
+                error!("failed to open data file {} in MMapIO new", e);
                 Err(Errors::FailedOpenDataFile)
             }
         }
