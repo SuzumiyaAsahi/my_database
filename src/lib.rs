@@ -2,7 +2,7 @@
 mod batch;
 mod data;
 pub mod db;
-mod error;
+pub mod error;
 mod fio;
 mod index;
 pub mod iterator;
