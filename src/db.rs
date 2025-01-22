@@ -238,6 +238,18 @@ impl Engine {
         })
     }
 
+    /// 备份数据目录
+    pub fn backup(&self, dir_path: PathBuf) -> Result<()> {
+        let exclude = [FILE_LOCK_NAME];
+        if let Err(e) =
+            crate::util::file::copy_dir(self.options.dir_path.clone(), dir_path, &exclude)
+        {
+            log::error!("failed to copy dir: {}", e);
+            return Err(Errors::FailedToCopyDirectory);
+        }
+        Ok(())
+    }
+
     /// 存储 key/value 数据，key 不能为空
     pub fn put(&self, key: Bytes, value: Bytes) -> Result<()> {
         // 判断 key 的有效性

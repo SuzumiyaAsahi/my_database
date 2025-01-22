@@ -180,6 +180,30 @@ pub fn get_data_file_name(dir_path: PathBuf, file_id: u32) -> PathBuf {
     dir_path.join(name)
 }
 
+// 拷贝数据目录
+pub fn copy_dir(src: PathBuf, dest: PathBuf, exclude: &[&str]) -> std::io::Result<()> {
+    if !dest.exists() {
+        std::fs::create_dir_all(&dest)?;
+    }
+
+    for dir_entry in std::fs::read_dir(src)? {
+        let entry = dir_entry?;
+        let src_path = entry.path();
+
+        if exclude.iter().any(|&x| src_path.ends_with(x)) {
+            continue;
+        }
+
+        let dest_path = dest.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir(src_path, dest_path, exclude)?;
+        } else {
+            std::fs::copy(src_path, dest_path)?;
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
