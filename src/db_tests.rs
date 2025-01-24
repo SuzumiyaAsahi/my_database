@@ -8,6 +8,33 @@ use bytes::Bytes;
 use std::path::PathBuf;
 
 #[test]
+fn my_test_engine_put() {
+    let mut opts = Options {
+        dir_path: PathBuf::from("/tmp/bitcask-rs-http"),
+        ..Default::default()
+    };
+    opts.data_file_size = 64 * 1024 * 1024;
+    let engine = Engine::open(opts.clone()).expect("failed to open engine");
+
+    // 1.正常 Put 一条数据
+    let res1 = engine.put(Bytes::from("11"), get_test_value(11));
+    assert!(res1.is_ok());
+}
+
+#[test]
+fn my_test_engine_get() {
+    let mut opts = Options {
+        dir_path: PathBuf::from("/tmp/bitcask-rs-http"),
+        ..Default::default()
+    };
+    opts.data_file_size = 64 * 1024 * 1024;
+    let engine = Engine::open(opts.clone()).expect("failed to open engine");
+
+    // 1.正常读取一条数据
+    let res1 = engine.get(Bytes::from("11"));
+    assert!(res1.is_ok());
+}
+#[test]
 fn test_engine_put() {
     let mut opts = Options {
         dir_path: PathBuf::from("/tmp/bitcask-rs-put"),

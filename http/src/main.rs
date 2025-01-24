@@ -1,6 +1,13 @@
+mod error;
+use axum::routing::delete;
 use axum::{
-    body::Bytes, extract::{Path, State}, routing::get, Router,
-    response::{IntoResponse, Response}
+    Json, Router,
+    body::Bytes,
+    debug_handler,
+    extract::{Path, State},
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::{get, post},
 };
 use my_data::{db::Engine, options::Options};
 use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
@@ -31,7 +38,11 @@ async fn main() {
     let engine = Arc::new(Engine::open(opts).unwrap());
 
     let app = Router::new()
-        .route("/", get(|| async { "Hello, World!" }))
+        .route("/get/{key}", get(get_handler))
+        .route("/listkeys", get(list_handler))
+        .route("/put", post(put_handler))
+        .route("/delete/{key}", delete(delete_handler))
+        .route("/stat", get(stat_handler))
         .layer((
             TraceLayer::new_for_http(),
             TimeoutLayer::new(Duration::from_secs(10)),
@@ -70,13 +81,78 @@ async fn shutdown_signal() {
     }
 }
 
-async fn get_handler(Path(key): Path<String>, State(eng): State<Arc<Engine>>) {
+async fn put_handler(
+    State(eng): State<Arc<Engine>>,
+    Json(data): Json<HashMap<String, String>>,
+) -> Result<Response, error::MyError> {
+    for (key, value) in data.iter() {
+        if eng
+            .put(Bytes::from(key.to_string()), Bytes::from(value.to_string()))
+            .is_err()
+        {
+            return Err(error::MyError::FailToPutKey);
+        }
+    }
+
+    Ok((StatusCode::OK, "OK").into_response())
+}
+
+async fn get_handler(
+    Path(key): Path<String>,
+    State(eng): State<Arc<Engine>>,
+) -> Result<Response, error::MyError> {
     let value = match eng.get(Bytes::from(key.to_string())) {
         Ok(val) => val,
         Err(e) => {
-            if e != my_data::error::Errors::KeyNotFound {
-                return ;
+            if e == my_data::error::Errors::KeyNotFound {
+                return Ok((StatusCode::OK, "key not found").into_response());
+            } else {
+                return Err(error::MyError::FailToGetKeyInEngine);
             }
         }
+    };
+    Ok((StatusCode::OK, value).into_response())
+}
+
+async fn list_handler(State(eng): State<Arc<Engine>>) -> Result<Response, error::MyError> {
+    let keys = match eng.list_keys() {
+        Ok(keys) => keys,
+        Err(_) => return Err(error::MyError::FailToListKeys),
+    };
+
+    let keys = keys
+        .into_iter()
+        .map(|key| String::from_utf8(key.to_vec()).unwrap())
+        .collect::<Vec<String>>();
+
+    let result = serde_json::to_string(&keys).unwrap();
+
+    Ok((StatusCode::OK, Json(result)).into_response())
+}
+
+async fn delete_handler(
+    State(eng): State<Arc<Engine>>,
+    Path(key): Path<String>,
+) -> Result<Response, error::MyError> {
+    if let Err(e) = eng.delete(Bytes::from(key.to_string())) {
+        if e != my_data::error::Errors::KeyIsEmpty {
+            return Err(error::MyError::FailToDelte);
+        }
     }
+    Ok((StatusCode::OK, "OK").into_response())
+}
+
+async fn stat_handler(State(eng): State<Arc<Engine>>) -> Result<Response, error::MyError> {
+    let stat = match eng.stat() {
+        Ok(stat) => stat,
+        Err(_) => return Err(error::MyError::FailToGetState),
+    };
+
+    let mut result = HashMap::new();
+    result.insert("key_num", stat.key_num);
+    result.insert("data_file_num", stat.data_file_num);
+    result.insert("reclaim_size", stat.reclaim_size);
+    result.insert("disk_size", stat.disk_size as usize);
+
+    Ok((StatusCode::OK, Json(result)).into_response())
 }
